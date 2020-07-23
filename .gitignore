@@ -1,6 +1,7 @@
 __pycache__
 data
 analyzed
+sample_analyzed
 tests
 .DS_Store
 screen-analyzer.conf
