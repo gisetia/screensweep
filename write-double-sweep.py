@@ -1,6 +1,7 @@
 # %%
 import re
 import os
+from math import log10
 import pandas as pd
 from utils import timer
 
@@ -13,10 +14,10 @@ params = {'screen_name': 'PDL1_IFNg',
         'end': 'tx',
         'overlap': 'both',
         'direction': 'sense',
-        'step': 1000}
+        'step': 500}
 
-indata_dir = 'sample-data/screen-analyzer-data'
-# indata_dir = 'data/screen-analyzer-data'
+# indata_dir = 'sample-data/screen-analyzer-data'
+indata_dir = 'data/screen-analyzer-data'
 
 @timer
 def get_sweep_data(data_dir: str, params: dict) -> pd.DataFrame:
@@ -76,9 +77,9 @@ sweep = get_sweep_data(indata_dir, params)
 
 # %%
 
-sweep = sweep.head(1000)
-outdata_dir = 'sample-data/analyzed-data'
-# outdata_dir = 'data/analyzed-data'
+# sweep = sweep.head(10000)
+# outdata_dir = 'sample-data/analyzed-data'
+outdata_dir = 'data/analyzed-data'
 
 @timer
 def get_gene_info(data_dir: str, sweep_data: pd.DataFrame, 
@@ -104,8 +105,8 @@ def get_gene_info(data_dir: str, sweep_data: pd.DataFrame,
         gene_data = group.pivot(index='srt_off', columns='end_off', 
                     values=['gene_name', 'low_counts', 'high_counts', 'p',
                             'p_fdr','log2_mi', 'srt_pos', 'end_pos'])
-        
-        # Get slopes when changing parameters in both directions 
+
+        # Get slopes of log2 MI when changing parameters in both directions 
         # (delta log2 MI per 1,000 bp)
         slope_sdir = (gene_data['log2_mi'] 
                       - gene_data['log2_mi'].shift(1))/(params['step']*0.001)
@@ -114,15 +115,27 @@ def get_gene_info(data_dir: str, sweep_data: pd.DataFrame,
                       - gene_data['log2_mi'].shift(1, 
                                              axis=1))/(params['step']*0.001)
 
+        # Get lof of ratio of p values when changing parameters in 
+        # both directions 
+        gene_data['p_fdr'] = gene_data['p_fdr'].replace(0, 1e-300)
+        p_ratio_sdir = (gene_data['p_fdr']/
+                        gene_data['p_fdr'].shift(1)).applymap(log10)
+        p_ratio_edir = (gene_data['p_fdr']/
+                        gene_data['p_fdr'].shift(1, axis=1)).applymap(log10)
+
         gene_data = gene_data.stack()
         gene_data['sl_sdir'] = slope_sdir.stack()
         gene_data['sl_edir'] = slope_edir.stack()
+        gene_data['p_ratio_sdir'] = p_ratio_sdir.stack()
+        gene_data['p_ratio_edir'] = p_ratio_edir.stack()
     
         gene_info[name] = gene_data
 
         # gene_data.to_csv(f'{data_path}{name}.csv')
     all_info = pd.concat(gene_info.values(), ignore_index=False)
     all_info.to_csv(f'{data_path}all_gene_info.csv')
+    all_info.to_csv(f'{data_path}all_gene_info.gz', 
+                    compression='gzip')
 
     return gene_info
 
