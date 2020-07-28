@@ -1,118 +1,112 @@
 # %%
 
+import pandas as pd
+
+from analyze import read_analyzed_sweep, get_flagged_genes
+
 # Define parameters of screen to read
 params = {'screen_name': 'PDL1_IFNg',
-          'assembly': 'hg38',
-          'trim_length': '50',
-          'mode': 'collapse',
-          'start': 'tx',
-          'end': 'tx',
-          'overlap': 'both',
-          'direction': 'sense',
-          'step': 1000}
+        'assembly': 'hg38',
+        'trim_length': '50',
+        'mode': 'collapse',
+        'start': 'tx',
+        'end': 'tx',
+        'overlap': 'both',
+        'direction': 'sense',
+        'step': 500}
 
-# data_dir = 'sample_analyzed'
-data_dir = 'analyzed'
+data_dir = 'data/analyzed-data'
+# data_dir = 'sample-data/analyzed-data'
 
-import re
-import pandas as pd
-import time
+grouped_sweep = read_analyzed_sweep(data_dir, params)
 
-def get_sweep_data(data_dir: str, params: dict) -> pd.DataFrame:
-    '''Get dataframe with all data resulting from a double parameter sweep of
-    'screen-analyzer analyze'.
-    ( dataframe columns are gene_name, low_counts, high_counts, p, fdr_p,
-    log2_mi, 'start', position, offset)
-    '''
-
-    data_path = (f'''{data_dir}/{params['screen_name']}/'''
-                f'''{params['assembly']}/{params['trim_length']}/'''
-                f'''mode={params['mode']}_direction={params['direction']}'''
-                f'''_overlap={params['overlap']}/double-sweep'''
-                f'''_step={params['step']}/''')
-
-    files = os.listdir(data_path)
-    df_list = []  # Initialize list to append data
-    for filename in files:
-
-        if filename.startswith('out'):
-            # Get param values from filename
-            match = re.search(rf'_start=(.*?)_', filename)
-            start = match.group(1)
-            match = re.search(rf'_end=(.*?)_', filename)
-            end = match.group(1)
-        
-            # File to df, add columns for each param value and add to list
-            df = pd.read_csv(data_path + filename, sep='\t',
-                                index_col=None, header=None)
-            df[6] = start
-            df[7] = end
-            df_list.append(df)
-
-    # Create single dataframe from list
-    sweep_data = pd.concat(df_list, axis=0, ignore_index=True)
-    sweep_data = sweep_data.rename(columns={0: 'gene_name', 1: 'low_counts',
-                                            2: 'high_counts', 3: 'p',
-                                            4: 'p_fdr', 5: 'log2_mi',
-                                            6: 'start', 7: 'end'})
-
-    # Split parameter values into txt and numbers, creating one column for each
-    # eg. 'tx-100' is split in column 'position' with value 'tx':str and column
-    # 'offset' with value -100:int
-    sweep_data[['srt_pos', 'end_pos']] = sweep_data[['start', 'end']].applymap(
-        lambda x: re.split('(-|\\+)', x)[0])
-    sweep_data[['srt_off', 'end_off']] = sweep_data[['start', 'end']].applymap(
-        lambda x: ''.join(re.split('(-|\\+)', x)[1:3])).astype(int)
-
-    # Sort by name and offsets
-    sweep_data = sweep_data.sort_values(by=['gene_name', 'srt_off', 'end_off'])
-
-    return sweep_data
-
-cols = ['gene_name', 'p_fdr', 'log2_mi', 'srt_off', 'end_off']
-sweep = get_sweep_data(data_dir, params)[cols]
 # %%
 
-slope_thr = 2
-p_thr = 0.001
+slope_thr = 3
+p_ratio_thr= 4
+flagged_genes = get_flagged_genes(grouped_sweep, slope_thr, p_ratio_thr)
 
-genes = sweep.gene_name.unique()
+# %%
 
-start_time = time.time()
+# Plot
 
-genes = genes[0:1000]
-l_genes = len(genes)
-flagged_genes = []
-for idx, g in enumerate(genes):
-# for g in genes[0:100]:
-# for g in ['CD274']:
+gene = 'ZBTB14'
 
-    if not idx % 50:
-        print(f'Analyzing gene {idx+1} of {l_genes}.')
+gene_info = pd.DataFrame()
+for name, group in grouped_sweep:
+    if name == gene.upper():
+        
+        gene_info = group.unstack()
+        
+from math import ceil
+from numpy import interp, where
+from bokeh.plotting import figure, output_file, show
+from bokeh.models import ColumnDataSource, ColorBar
+from bokeh.transform import linear_cmap
+from bokeh.palettes import Spectral6, Viridis8, GnBu8, PiYG8, RdYlBu8
 
-    gene = sweep.query('gene_name == @g')
-    gene = gene.pivot(index='srt_off', columns='end_off', 
-                      values=['p_fdr','log2_mi'])
 
-    # Get slopes when changing parameters in both directions 
-    # (delta log2 MI per 1,000 bp)
-    slope_sdir = (gene['log2_mi'] 
-                  - gene['log2_mi'].shift(1))/(params['step']*0.001)
-    slope_edir = (gene['log2_mi'] 
-                  - gene['log2_mi'].shift(1, axis=1))/(params['step']*0.001)
+palette = PiYG8[::-1]
+plot_width = 600
 
-    gene = gene.stack()
-    gene['sl_sdir'] = slope_sdir.stack()
-    gene['sl_edir'] = slope_edir.stack()
+# Plot
 
-    flags = gene.query('(sl_sdir > @slope_thr | sl_edir > @slope_thr) '
-                       '& p_fdr < @p_thr')
+# Axes ranges
+padd = ceil(params['step']/1.5)
+xlim = (-10000 - padd, 2000 + padd)
+ylim = (10000 + padd, -2000 - padd)
 
-    if not flags.empty:
-        flagged_genes.append(g)
+plt = figure(title=f'Gene: {gene.upper()} - Screen: {params["screen_name"]}',
+               x_axis_label='End offset (bp)',
+               y_axis_label='Start offset (bp)',
+               plot_width=plot_width,
+               plot_height=plot_width-15,
+               match_aspect=True,
+               aspect_scale=1,
+               x_range=xlim,
+               y_range=ylim
+               )
 
-print('--- %s seconds ---\n' % (time.time() - start_time))
+# Rename 0 to position (tx, cds end,start)
+plt.xaxis.major_label_overrides = {0: (f'End '
+                                     f'{gene_info["end_pos"].iloc[0,0]}')}
+plt.yaxis.major_label_overrides = {0: (f'Start '
+                                     f'{gene_info["srt_pos"].iloc[0,0]}')}
+# Lines to mark 0,0
+plt.line(x=[0, 0], y=[ylim[0], ylim[1]], color='#5f5f61')
+plt.line(x=[xlim[0], xlim[1]], y=[0, 0], color='#5f5f61')
 
-print(flagged_genes)
+s = gene_info['log2_mi'].stack().reset_index()
+s = s.rename(columns={0: 'log2_mi'})
+
+p_thr = 0.00001
+p = gene_info['p_fdr'].stack().reset_index()
+p = p.rename(columns={0: 'p_fdr'})
+p['p_masked'] = where(p.p_fdr < p_thr, 1, 0)
+s['log2_mi_masked'] = s.log2_mi.where(p.p_masked == 1)
+
+# Rescale log2 MI to get nice sizes in plot
+min_size = plot_width/100
+max_size = plot_width/38
+s['log2_mi_rescaled'] = s['log2_mi'].map(lambda x: interp(abs(x), (0, 8), 
+                                                         (min_size, 
+                                                          max_size)))
+
+source = ColumnDataSource(s)
+
+line_color = linear_cmap(field_name='log2_mi', palette=palette,
+                         low=-8 ,high=8)
+fill_color = linear_cmap(field_name='log2_mi_masked', palette=palette,
+                         low=-8 ,high=8, nan_color='white')
+
+plt.circle(x='end_off', y='srt_off', source=source, size='log2_mi_rescaled',
+line_color=line_color, color=fill_color, line_width=3)
+
+color_bar = ColorBar(color_mapper=line_color['transform'], width=15, 
+                     location=(0,0))
+plt.add_layout(color_bar, 'right')
+
+output_file('test_plot.html')
+show(plt)
 
 # %%
