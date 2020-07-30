@@ -1,9 +1,9 @@
 # %%
 
-from analyze import get_sweep_data, write_sweep_data
+from tools.analyzesweep import get_sweep_data, write_sweep_data
 
 # Define parameters of screen to read
-params = {'screen_name': 'PDL1_IFNg',
+params = {'screen_name': 'IkBa',
         'assembly': 'hg38',
         'trim_length': '50',
         'mode': 'collapse',

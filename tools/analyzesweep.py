@@ -4,7 +4,7 @@ import pandas as pd
 from math import log10
 from typing import Dict, Tuple
 
-from utils import timer
+from .utils import timer
 
 @timer
 def get_sweep_data(data_dir: str, params: dict) -> pd.DataFrame:
@@ -191,12 +191,12 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
                       p_ratio_thr: float) -> Tuple[Dict[str, pd.DataFrame], 
                                              Dict[str, pd.DataFrame]]:
     '''Given a grouped_sweep created by 'read_analyzed_sweep', finds genes
-    that have a higher slope and p ratios than a threshold given by 
+    that have a higher slope and p ratio than the thresholds given by 
     'slope_thr' and 'p_ratio_thr'. 
     Slope refers to the change in the log2 mutation index per 1,000 bp.
     P ratio refers to the change in the log10 p fdr per 1,000 bp.
     Returns tuple with two dictionaries, where keys are gene names and values
-    are subsets of dataframe where thresholds are passed when changing either 
+    are subsets of dataframe where both thresholds are passed when changing either 
     the start or the end parameter, respectively.
     '''
 
@@ -219,12 +219,29 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
 
     return (flagged_sdir, flagged_edir)
 
-@timer
-def get_gene_inf(gene: str, 
-                 grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy) -> \
-                 pd.DataFrame:
+
+def get_gene_info(gene: str, 
+                  grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy) -> \
+                  pd.DataFrame:
     '''Given a grouped_sweep created by 'read_analyzed_sweep', returns
-    dataframe containing all sweep data for a given gene.
+    unstacked dataframe containing all sweep data for a given gene.
     '''
     gene = gene.upper()
-    grouped_sweep.get_group(gene)
+    gene_info = grouped_sweep.get_group(gene)
+
+    return gene_info.unstack()
+
+def get_flags_for_gene(gene: str, 
+                       grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
+                       slope_thr: float, 
+                       p_ratio_thr: float) -> Tuple[Dict[str, pd.DataFrame], 
+                                             Dict[str, pd.DataFrame]]:
+
+    gene_info = get_gene_info(gene, grouped_sweep).stack()
+
+    flags_sdir = gene_info.query('abs(sl_sdir) > @slope_thr '
+                                 '& abs(p_ratio_sdir) > @p_ratio_thr')
+    flags_edir = gene_info.query('abs(sl_edir) > @slope_thr '
+                                 '& abs(p_ratio_edir) > @p_ratio_thr')
+    
+    return (flags_sdir, flags_edir)
