@@ -2,6 +2,8 @@ import pandas as pd
 from ctypes import Structure, c_int8, c_char, c_int32, sizeof
 from typing import List, Union, Optional
 from dataclasses import dataclass
+from itertools import groupby
+from operator import itemgetter
 from .utils import timer
 
 @dataclass
@@ -43,7 +45,7 @@ def read_all_insertions(data_dir: str, params: dict) -> List[Insertion]:
     return insertions
 
 # @timer
-def get_gene_positions(gene: str, assembly: dict) -> pd.DataFrame:
+def get_gene_positions(gene: str, assembly: str) -> pd.DataFrame:
 
     filename = f'data/genes/ncbi-genes-{assembly}.txt'
     genes = pd.read_csv(filename, sep='\\t')
@@ -202,3 +204,60 @@ def read_gene_insertions(gene: str, data_dir: str, params: dict,
                                                    'dir', 'pos'])
 
     return insertions
+
+
+def contig_list_lims(lst):
+    '''Divide a list into contiguous sublists and return the lower and 
+    upper limits of such sublists.
+    '''
+    lims = []
+    for k, g in groupby(enumerate(lst), lambda x: x[0] - x[1]):
+        x = list(map(itemgetter(1), g))
+        lims.append([x[0], x[-1]])
+    return lims
+
+# @timer
+def get_exon_regions(gene_pos: Optional[pd.DataFrame] = None,
+                     gene: Optional[str] = None,
+                     assembly: Optional[str] = None) -> pd.DataFrame:
+
+    if not isinstance(gene_pos, pd.DataFrame):
+        if not gene or not assembly:
+            raise ValueError('Gene and assembly are required when gen_pos '
+                             'is not given.')
+        gene_pos = get_gene_positions(gene, assembly)
+
+    exon = gene_pos.copy(deep=True)
+    exon = exon.reset_index(drop=True)
+    exon['tx_id'] = exon.index + 1
+
+    cols = ['exonStarts','exonEnds']
+    exon[cols] = exon[cols].applymap(lambda x: x.split(','))
+
+    exon['cdsRange'] = exon.apply(lambda x: range(x.cdsStart, x.cdsEnd), axis=1)
+    exon['exonRange'] = exon.apply(lambda t: [range(int(x),int(y)) for i,x 
+                            in enumerate(t['exonStarts']) for j,y 
+                            in enumerate(t['exonEnds']) if i == j and x != ''
+                            and y != ''], axis=1)
+
+    exon = exon.explode('exonRange')
+    exon = exon.reset_index(drop=True)
+    exon['exon_id'] = exon.index + 1
+    exon = exon.drop(columns=['#bin', 'exonStarts', 'exonEnds', 'score', 
+                            'cdsStartStat', 'cdsEndStat', 'exonFrames', 
+                            'cdsStart', 'cdsEnd'])
+
+    exon['exCds_lst'] = exon.apply(lambda t: [x for x in t.exonRange 
+                                if x in t.cdsRange], axis=1)
+    exon['exUtr_lst'] = exon.apply(lambda t: [x for x in t.exonRange 
+                                if not x in t.cdsRange], axis=1)
+
+    exon['exCds'] = exon.apply(lambda t: contig_list_lims(t.exCds_lst), axis=1)
+    exon['exUtr'] = exon.apply(lambda t: contig_list_lims(t.exUtr_lst), axis=1)
+
+    exon_regions = exon.melt(id_vars=['name2', 'name','exon_id', 'tx_id'],
+                            value_vars=['exCds','exUtr'], 
+                            var_name='reg_type', value_name='reg_lims')
+    exon_regions = exon_regions.explode('reg_lims').dropna()
+    
+    return exon_regions
