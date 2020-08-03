@@ -21,6 +21,9 @@ class CInsertion(Structure):
 
 @timer
 def read_all_insertions(data_dir: str, params: dict) -> List[Insertion]:
+    '''Reads insertion binary C files and returns the data as a list of 
+    Insertion classes.
+    '''
 
     data_path = (f'''{data_dir}/{params['screen_name']}/'''
                 f'''{params['assembly']}/{params['trim_length']}/''')
@@ -46,7 +49,8 @@ def read_all_insertions(data_dir: str, params: dict) -> List[Insertion]:
 
 # @timer
 def get_gene_positions(gene: str, assembly: str) -> pd.DataFrame:
-
+    '''Returns data from refseq file as dataframe.
+    '''
     filename = f'data/genes/ncbi-genes-{assembly}.txt'
     genes = pd.read_csv(filename, sep='\\t')
 
@@ -59,102 +63,16 @@ def get_gene_positions(gene: str, assembly: str) -> pd.DataFrame:
 
     return gene_data
 
-# noooo
-@timer
-def get_gene_insertions(gene: str, assembly: str, insertions: List[Insertion],
-                        padding: Optional[int] = None) -> \
-                        List[Insertion]:
-
-    padding = padding or 2000
-
-    gene_pos = get_gene_positions(gene, assembly)
-
-    min_pos = min(gene_pos['txStart']) - padding
-    max_pos = max(gene_pos['txEnd']) + padding
-
-    if len(gene_pos['chrom'].unique()) > 1:
-        print(f'Warning! Gene is located in more than one chromosome. '
-              'Taking only chromosomy of first entry')
-    if len(gene_pos['strand'].unique()) > 1:
-        print(f'Warning! Gene is located in more than one strand. '
-              'Taking only strand of first entry')
-
-    chrom = gene_pos['chrom'].iloc[0]
-    gene_strand = gene_pos['strand'].iloc[0]
-
-    gene_ins = [x for x in insertions if (x.chr == chrom 
-                                        and x.pos > min_pos 
-                                        and x.pos < max_pos)]
-
-    for i in gene_ins:
-        if i.strand == gene_strand:
-            i.dir = 'sense' 
-        else:
-            i.dir = 'antisense'
-    
-    return gene_ins
-
-# noo
-@timer
-def read_gene_insertions_noo(gene: str, data_dir: str, params: dict,
-                         gene_pos: Optional[pd.DataFrame] = None,
-                         padding: Optional[int] = None) -> \
-                         List[Insertion]:
-
-    padding = padding or 2000
-
-    if not isinstance(gene_pos, pd.DataFrame):
-        gene_pos = get_gene_positions(gene, params['assembly'])
-
-    min_pos = min(gene_pos['txStart']) - padding
-    max_pos = max(gene_pos['txEnd']) + padding
-
-    if len(gene_pos['chrom'].unique()) > 1:
-        print(f'Warning! Gene is located in more than one chromosome. '
-              'Taking only chromosomy of first entry')
-    if len(gene_pos['strand'].unique()) > 1:
-        print(f'Warning! Gene is located in more than one strand. '
-              'Taking only strand of first entry')
-
-    chrom = gene_pos['chrom'].iloc[0]
-    gene_strand = gene_pos['strand'].iloc[0]
-
-    data_path = (f'''{data_dir}/{params['screen_name']}/'''
-                f'''{params['assembly']}/{params['trim_length']}/''')
-
-    keys = [x for x in list(range(0,26)) if not x == 23]
-    values = [f'chr{i}' for i in range(0,23)] + ['chrX'] + ['chrY']
-    chr_dict = dict(zip(keys, values))
-
-    channels = ['high', 'low']
-
-    insertions = []
-    for c in channels:
-        filename = f'{data_path}{c}'
-
-        with open(filename, 'rb') as file:
-            c_ins = CInsertion()
-            while file.readinto(c_ins) == sizeof(c_ins):
-                if (chr_dict[c_ins.c] == chrom 
-                    and c_ins.p > min_pos
-                    and c_ins.p < max_pos):
-                    ins = Insertion(c, chr_dict[c_ins.c], 
-                                    str(c_ins.s, 'utf-8'), c_ins.p)
-
-                    if ins.strand == gene_strand:
-                        ins.dir = 'sense' 
-                    else:
-                        ins.dir = 'antisense'
-
-                    insertions.append(ins)
-
-    return insertions
-
 @timer
 def read_gene_insertions(gene: str, data_dir: str, params: dict,
                          gene_pos: Optional[pd.DataFrame] = None,
                          padding: Optional[int] = None) -> \
-                         List[Insertion]:
+                         pd.DataFrame:
+    '''Returns dataframe with insertion info, eg.:
+    chan	chr	    strand	dir	        pos
+    high	chr9	-	    antisense	4983150
+    high	chr9	+	    sense	    4983164
+    '''
 
     padding = padding or 2000
 
@@ -220,6 +138,13 @@ def contig_list_lims(lst):
 def get_exon_regions(gene_pos: Optional[pd.DataFrame] = None,
                      gene: Optional[str] = None,
                      assembly: Optional[str] = None) -> pd.DataFrame:
+    '''Returns dataframe with start and end positions of all gene exons and
+    whether they are cds or utr. Eg.:
+    name2	name	        exon_id	tx_id	reg_type	reg_lims
+    JAK2	NM_001322195.1	2	    1	    exCds	    [5021987, 5022212]
+    JAK2	NM_001322195.1	3	    1	    exCds	    [5029782, 5029905]
+    JAK2	NM_004972.3	    126	    6	    exUtr	    [5021962, 5021986]
+    '''
 
     if not isinstance(gene_pos, pd.DataFrame):
         if not gene or not assembly:
@@ -234,7 +159,8 @@ def get_exon_regions(gene_pos: Optional[pd.DataFrame] = None,
     cols = ['exonStarts','exonEnds']
     exon[cols] = exon[cols].applymap(lambda x: x.split(','))
 
-    exon['cdsRange'] = exon.apply(lambda x: range(x.cdsStart, x.cdsEnd), axis=1)
+    exon['cdsRange'] = exon.apply(lambda x: range(x.cdsStart, x.cdsEnd), 
+                                  axis=1)
     exon['exonRange'] = exon.apply(lambda t: [range(int(x),int(y)) for i,x 
                             in enumerate(t['exonStarts']) for j,y 
                             in enumerate(t['exonEnds']) if i == j and x != ''

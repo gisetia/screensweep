@@ -1,7 +1,12 @@
+import pandas as pd
+
 from math import pi, ceil
 from numpy import interp
+from scipy import stats
+
 from bokeh.plotting import figure, output_file, show
-from bokeh.models import ColumnDataSource, Arrow, OpenHead, HoverTool, Text
+from bokeh.models import (ColumnDataSource, Arrow, OpenHead, HoverTool, Text, 
+Square, SquarePin)
 from bokeh.palettes import PiYG8
 from bokeh.transform import linear_cmap
 from bokeh.layouts import row, column
@@ -13,9 +18,13 @@ from .analyzeinsertions import (get_exon_regions, read_gene_insertions,
                                 get_gene_positions)
 
 
-def plot_insertions(gene, params, data_dir):
+def plot_insertions(gene, params, data_dir, gene_pos = None):
+
+    if not isinstance(gene_pos, pd.DataFrame):
+        print('Loading gene positions.')
+        gene_pos = get_gene_positions(gene, params['assembly'])
+
     padd = 2000
-    gene_pos = get_gene_positions(gene, params['assembly'])
     insertions = read_gene_insertions(gene, data_dir, params, 
                                     gene_pos=gene_pos, padding=padd)
     exons = get_exon_regions(gene_pos)
@@ -26,14 +35,13 @@ def plot_insertions(gene, params, data_dir):
     zero = min(gene_pos['txStart'])
     xlim = (min(gene_pos['txStart']) - padd - zero,
             max(gene_pos['txEnd']) + padd - zero)
-    ylim = (0, 17 + len(gene_pos))
+    ylim = (0, 18 + len(gene_pos))
 
     plt = figure(title=f'Insertions in gene: {gene.upper()} - '
                     f'Screen: {params["screen_name"]}',
                 x_axis_label='Position (bp)',
                 plot_width=1000,
                 plot_height=400,
-
                 x_range=(xlim[0]-padd*0.1, xlim[1] + padd*0.1),
                 y_range=ylim
                 )
@@ -44,14 +52,19 @@ def plot_insertions(gene, params, data_dir):
     plt.yaxis.minor_tick_line_color = None
     plt.yaxis.axis_line_color = None
     plt.outline_line_color = None
-    plt.xaxis.major_label_overrides = {0: 'tx Start'}
-    plt.yaxis.ticker = [1, 2, 4, 5, 9, 14]
+
+    if gene_pos['strand'].iloc[0] == '+':
+        plt.xaxis.major_label_overrides = {0: 'tx Start'}
+    else:
+        plt.xaxis.major_label_overrides = {0: 'tx End'}
+
+    plt.yaxis.ticker = [1, 2, 4, 5, 10, 15]
     plt.yaxis.major_label_overrides = {1: 'Low anti-sense',
                                     2: 'High anti-sense',
                                     4: 'Low sense',
                                     5: 'High sense',
-                                    9: 'Sense insertion density',
-                                    14: 'Transcript(s)'}
+                                    10: 'Sense insertion density',
+                                    15: 'Transcript(s)'}
 
     plt.line(x=xlim, y=[1, 1], color='#BCBCBF', line_width=2)
     plt.line(x=xlim, y=[2, 2], color='#BCBCBF', line_width=2)
@@ -75,18 +88,19 @@ def plot_insertions(gene, params, data_dir):
     gene_pos['tx_id'] = gene_pos.index + 1
     for idx, tx in gene_pos.iterrows():
 
-        tx_length = tx['txEnd'] - tx['txStart']
+        # tx_length = tx['txEnd'] - tx['txStart']
+        arrow_length = (xlim[1] - xlim[0])/100
 
         # Position of arrow
         if tx['strand'] == '+':
-            x_end = tx['txEnd'] - zero + tx_length/30
-            x_srt = x_end - tx_length/30
+            x_end = tx['txEnd'] - zero + arrow_length
+            x_srt = tx['txEnd'] - zero
         else:
-            x_end = tx['txStart'] - zero - tx_length/30
-            x_srt = x_end + tx_length/30
+            x_end = tx['txStart'] - zero - arrow_length
+            x_srt = tx['txStart'] - zero
         ypos = tx['tx_id'] + y_off
 
-        plt.add_layout(Arrow(end=OpenHead(size=6, line_width=2, 
+        plt.add_layout(Arrow(end=OpenHead(size=4, line_width=2, 
                             line_color='#5f5f61'), 
                             line_color='#5f5f61', line_width=2,
                             x_start=x_srt, y_start=ypos, 
@@ -143,42 +157,38 @@ def plot_insertions(gene, params, data_dir):
 
     # Plot insertions
     plt.dash(x='xpos', y='ypos', color='color', source=source,
-            angle=pi/2, line_width = 2, size=15,)
+            angle=pi/2, line_width = 2, size=12,)
 
     #endregion
 
     # Plot insertion density ------------------------------------------------------
     #region -------------------------------------------------------------------
 
-    from scipy import stats
-
     dens_off = 10
     x = range(xlim[0], xlim[-1] + 1, 10)
     plt.line(x=x, y=dens_off, color='#E2E2E4', line_width=1)
 
     dens_dict = dict()
+    ins_count = dict()
+    factor = 3
     for name, group in insertions.groupby(['chan','dir']):
-
         if name[1] == 'sense':
             dens = stats.gaussian_kde(group.xpos)
             dens = dens.evaluate(x)
-            dens_dict[name[0]] = 3*dens/max(dens)
+            dens_dict[name[0]] = factor*dens/max(dens)
+            ins_count[name[0]] = group.shape[0]
 
-            dens = dens_off + 3*dens/max(dens)
+    norm_dens = dict()
+    for key in dens_dict.keys():
+        norm_dens[key] = dens_dict[key]*ins_count[key]/max(ins_count.values())
+        dens_col = ins_colors[f'{key[0][0]}s']
+        plt.line(x=x, y=norm_dens[key] + dens_off, 
+                 color=dens_col, line_width=2)
 
-            dens_col = ins_colors[f'{name[0][0]}s']
-            plt.line(x=x, y=dens, color=dens_col, line_width=2)
-
-    dens_diff = dens_off + dens_dict['high'] - dens_dict['low']
+    dens_diff = dens_off + norm_dens['high'] - norm_dens['low']
     plt.line(x=x, y=dens_diff, color='#7450A2', line_width=2)
 
-
     #endregion
-
-    # output_file('plots/test_insertions.html')
-    # legend = column(col_leg, p_leg, flag_leg)
-    # layout = row(plt, legend)
-    # show(plt)
 
     return plt
 
@@ -188,7 +198,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
 
     plot_flags = plot_flags or 1
 
-    if not grouped_sweep:
+    if not isinstance(grouped_sweep, pd.core.groupby.generic.DataFrameGroupBy):
         print('Loading sweep data.')
         grouped_sweep = read_analyzed_sweep(data_dir, params)
 
@@ -209,7 +219,8 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
     # Rescale log2 MI to get nice sizes in plot
     min_size = plot_width/100
     max_size = plot_width/38
-    src['log2_mi_rescaled'] = src['log2_mi'].map(lambda x: interp(abs(x), (0, 8), 
+    src['log2_mi_rescaled'] = src['log2_mi'].map(lambda x: interp(abs(x), 
+                                                            (0, 8), 
                                                             (min_size, 
                                                             max_size)))
 
@@ -254,9 +265,15 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
     plt.add_tools(HoverTool(tooltips=[  ('Log2 MI', '@log2_mi'),
                                         ('Start offset', '@srt_off'),
                                         ('End offset', '@end_off'),
-                                        ('Low counts', '@low_counts'),
                                         ('High counts', '@high_counts'),
+                                        ('Low counts', '@low_counts'),
                                         ('P-value', '@p_fdr'),
+
+                                        ('\u0394 log2MI srt', '@sl_sdir'),
+                                        ('\u0394 log2MI end', '@sl_edir'),
+                                        ('\u0394 log10p srt', '@p_ratio_sdir'),
+                                        ('\u0394 log10p end', '@p_ratio_edir'),
+
                                         ],
                             names=['datapoints']
                                 #  show_arrow=False
@@ -268,9 +285,10 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
 
     if plot_flags:
 
-        slope_thr = 3
-        p_ratio_thr= 5
-        flags = get_flags_for_gene(gene, grouped_sweep, slope_thr, p_ratio_thr)
+        # slope_thr = 4
+        # p_ratio_thr = 6
+        # p_thr = 0.00001
+        flags = get_flags_for_gene(gene, grouped_sweep)
 
         f_col = ['#EBECEF', '#BCBCBF']
 
@@ -293,7 +311,13 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
     plt.circle(x='end_off', y='srt_off', source=source, 
             size='log2_mi_rescaled', line_width=3,
             line_color=line_color, color=fill_color,
-            name='datapoints')
+            name='datapoints', nonselection_fill_color=fill_color,
+            nonselection_fill_alpha=1, nonselection_line_alpha=1)
+
+    selected_circle = SquarePin(line_color=line_color, fill_color=fill_color,
+                            line_width=1)
+    renderer = plt.select(name='datapoints')
+    renderer.selection_glyph = selected_circle
     #endregion
 
     # Legend ------------------------------------------------------------------
@@ -400,6 +424,6 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
     layout = row(plt, legend)
     # show(layout)
 
-    return layout
+    return layout, src, plt
 
     #endregion

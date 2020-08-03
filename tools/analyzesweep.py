@@ -2,7 +2,7 @@ import re
 import os
 import pandas as pd
 from math import log10
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, Optional
 
 from .utils import timer
 
@@ -185,8 +185,21 @@ def read_analyzed_sweep(data_dir: str,
 
     return grouped_sweep
 
+
+def get_gene_info(gene: str, 
+                  grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy) -> \
+                  pd.DataFrame:
+    '''Given a grouped_sweep created by 'read_analyzed_sweep', returns
+    unstacked dataframe containing all sweep data for a given gene.
+    '''
+    gene = gene.upper()
+    gene_info = grouped_sweep.get_group(gene)
+
+    return gene_info.unstack()
+
 @timer
 def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
+                      p_thr: float,
                       slope_thr: float, 
                       p_ratio_thr: float) -> Tuple[Dict[str, pd.DataFrame], 
                                              Dict[str, pd.DataFrame]]:
@@ -204,44 +217,60 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
     flagged_edir = dict()
     for name, group in grouped_sweep:
 
-        flags_sdir = group.query('abs(sl_sdir) > @slope_thr '
-                                 '& abs(p_ratio_sdir) > @p_ratio_thr')
-        flags_edir = group.query('abs(sl_edir) > @slope_thr '
-                                 '& abs(p_ratio_edir) > @p_ratio_thr')
+        p_next_sdir = group['p_fdr'].shift(1)
+        group['min_p_sdir'] = min(group['p_fdr'],p_next_sdir)
+        
+        
+        # group['min_p_edir'] = min(group['p_fdr'], group['p_fdr'].shift(1), axis=1)
 
-        if not flags_sdir.empty:
-            print('start dir - ', name)
-            flagged_sdir[name] = flags_sdir
+        if not group.query('p_fdr < @p_thr').empty:
 
-        if not flags_edir.empty:
-            print('end dir - ', name)
-            flagged_edir[name] = flags_edir
+            flags_sdir = group.query(flags_query('start'))
+            flags_edir = group.query(flags_query('end'))
+
+            if not flags_sdir.empty:
+                print('start dir - ', name)
+                flagged_sdir[name] = flags_sdir
+
+            if not flags_edir.empty:
+                print('end dir - ', name)
+                flagged_edir[name] = flags_edir
+
+    print(f'\n# start flags: {len(flagged_sdir)} -- '
+          f'# end flags: {len(flagged_edir)}')
 
     return (flagged_sdir, flagged_edir)
 
 
-def get_gene_info(gene: str, 
-                  grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy) -> \
-                  pd.DataFrame:
-    '''Given a grouped_sweep created by 'read_analyzed_sweep', returns
-    unstacked dataframe containing all sweep data for a given gene.
-    '''
-    gene = gene.upper()
-    gene_info = grouped_sweep.get_group(gene)
-
-    return gene_info.unstack()
-
 def get_flags_for_gene(gene: str, 
                        grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
-                       slope_thr: float, 
-                       p_ratio_thr: float) -> Tuple[Dict[str, pd.DataFrame], 
-                                             Dict[str, pd.DataFrame]]:
+                       p_thr: Optional[float] = None,
+                       slope_thr: Optional[float] = None, 
+                       p_ratio_thr: Optional[float] = None) -> Union[Tuple[
+                                              Dict[str, pd.DataFrame], 
+                                              Dict[str, pd.DataFrame]], None]:
+
+    p_thr = p_thr or 0.00001
+    slope_thr = slope_thr or 4
+    p_ratio_thr = p_ratio_thr or 20
 
     gene_info = get_gene_info(gene, grouped_sweep).stack()
-
-    flags_sdir = gene_info.query('abs(sl_sdir) > @slope_thr '
-                                 '& abs(p_ratio_sdir) > @p_ratio_thr')
-    flags_edir = gene_info.query('abs(sl_edir) > @slope_thr '
-                                 '& abs(p_ratio_edir) > @p_ratio_thr')
+    if not gene_info.query('p_fdr < @p_thr').empty:
+        flags_sdir = gene_info.query(flags_query('start'))
+        flags_edir = gene_info.query(flags_query('end'))
     
-    return (flags_sdir, flags_edir)
+        return (flags_sdir, flags_edir)
+
+
+def flags_query(param: str) -> str:
+    '''Return string to use for querying flagged genes. Param: 'start' or 
+    'end'.
+    '''
+
+    # q = (f'abs(sl_{param[0]}dir) > @slope_thr '
+    #      f'| abs(p_ratio_{param[0]}dir) > @p_ratio_thr')
+
+    # q = (f'abs(sl_{param[0]}dir) > @slope_thr')
+    q = (f'abs(p_ratio_{param[0]}dir) > @p_ratio_thr')
+
+    return q
