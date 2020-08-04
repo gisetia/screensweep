@@ -1,9 +1,11 @@
 # %%
 
-from bokeh.plotting import figure, output_file, show
+from bokeh.plotting import figure, output_file, show, curdoc
 from bokeh.layouts import row, column
-from bokeh.models import CustomJS, TapTool, ColumnDataSource, Circle, Square
+from bokeh.models import AutocompleteInput, Div, CustomJS, TapTool, ColumnDataSource, Circle, Square
 from bokeh.models.annotations import Title
+from time import sleep
+from functools import partial
 
 # from tools.plots import plot_sweep, plot_insertions
 # from tools.analyzesweep import read_analyzed_sweep
@@ -26,72 +28,72 @@ params = {'screen_name': 'PDL1_IFNg',
 
 data_dir = 'data/analyzed-data'
 ins_data_dir = 'data/screen-analyzer-data'
-gene = 'socs1'
+gene = 'SOAT1'
 
-gene = gene.upper()
+gene_opts = []
 
-if not 'grouped_sweep' in locals():
-    print('Loading sweep data.')
+# Menus
+menu_margins = (20, 50, 0, 10)
+screen_opts = ['PDL1_IFNg', 'p-AKT']
+screen_menu = AutocompleteInput(title='Screen', value='', 
+                                completions=screen_opts, width=150,
+                                min_characters=1, case_sensitive=False,
+                                margin=menu_margins)
+gene_menu = AutocompleteInput(title='Gene', value='', 
+                                completions=gene_opts, width=150,
+                                min_characters=1, case_sensitive=False,
+                                margin=menu_margins)
+
+# Callbacks
+def load_screen(attr, old, new):
+    txt_out.text = 'Loading screen...'
+    curdoc().add_next_tick_callback(update_screen)
+
+
+def update_screen():
+    txt_out.text = 'Finished loading screen.'
+    screen = screen_menu.value
+    params['screen_name'] = screen
+    global grouped_sweep
     grouped_sweep = tls.analyzesweep.read_analyzed_sweep(data_dir, params)
-
-gene_pos = tls.analyzeinsertions.get_gene_positions(gene, params['assembly'])
-sweep_layout, sweep_src, sweep_plt = tls.plots.plot_sweep(gene, params, 
-                                                data_dir, grouped_sweep)
-ins = tls.plots.plot_insertions(gene, params, ins_data_dir, gene_pos)
-
-t = Title()
-t.text = ''
-ins.title = t
-
-# Get actual end position (rather than just end offset)
-tx_pos = (min(gene_pos['txStart']), max(gene_pos['txEnd']))
-
-if gene_pos['strand'].iloc[0] == '+':
-    sweep_src['start_pos'] = sweep_src['srt_off']
-    sweep_src['end_pos'] = sweep_src.eval('@tx_pos[1] + end_off - @tx_pos[0]')
-else:
-    sweep_src['end_pos'] = -sweep_src['end_off']
-    sweep_src['start_pos'] = sweep_src.eval('@tx_pos[1] - srt_off '
-                                            '- @tx_pos[0]')
-
-rect_src = ColumnDataSource({'x': [0, tx_pos[1]-tx_pos[0],
-                                  tx_pos[1]-tx_pos[0], 0], 
-                             'y': [0,0,6,6]})
-rect = ins.patch(x='x', y='y', fill_color='gray', source=rect_src, 
-                 line_color=None, alpha=0.15)
-rect.visible = False
+    curdoc().add_next_tick_callback(update_gene_menu)
 
 
-dummy = figure(title='', plot_width=230, plot_height=100,
-             toolbar_location=None)
-dummy.outline_line_color = None
+def update_gene_menu():
+    gene_opts = [name for name, group in grouped_sweep]
+    gene_menu.completions = gene_opts
 
 
-code = '''
-rect.visible = true;
-var idx = cb_data.source.selected.indices;
+def load_gene(attr, old, new):
+    txt_out.text = 'Loading gene...'
+    curdoc().add_next_tick_callback(update_gene)
 
-var s = sweep.data['start_pos'][idx]
-var e = sweep.data['end_pos'][idx]
 
-rect.data_source.data['x'] = [e, s, s, e]
-rect.data_source.change.emit(); 
+def update_gene():
+    txt_out.text = 'Finished loading gene.'
+    gene = gene_menu.value
+    sweep, ins = tls.plots.link_sweep_and_ins(gene, grouped_sweep, 
+                            params, data_dir, ins_data_dir)
+    layout.children[0].children[1] = sweep
+    layout.children[1] = ins
 
-console.log('Tap: ' + s + ' ' + e)
-'''
 
-sweep_source = ColumnDataSource(sweep_src[['start_pos', 'end_pos']])
+screen_menu.on_change('value', load_screen)
+gene_menu.on_change('value', load_gene)
 
-sweep_plt.add_tools(TapTool(names=['datapoints']))
-sweep_plt.select(TapTool).callback = CustomJS(args={'sweep': sweep_source,
-                                                    'rect': rect}, 
-                                              code=code)
+# Initialize empty figures
+sweep = figure(plot_width=600, plot_height=600,toolbar_location=None)
+sweep.outline_line_color = None
+ins = figure(plot_width=1000, plot_height=400,toolbar_location=None)
+ins.outline_line_color = None
 
-fig = row(dummy, sweep_layout)
-col = column(fig, ins)
+txt_out = Div(text='', margin=menu_margins)
 
+menus = column(screen_menu, gene_menu, txt_out)
+layout = column(row(menus, sweep), ins)
+
+curdoc().add_root(layout)
 output_file('plots/test_plot.html')
-show(col)
-
+show(layout)
 
 # %%

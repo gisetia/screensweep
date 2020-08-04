@@ -3,10 +3,11 @@ import pandas as pd
 from math import pi, ceil
 from numpy import interp
 from scipy import stats
+from matplotlib import cm, colors
 
 from bokeh.plotting import figure, output_file, show
 from bokeh.models import (ColumnDataSource, Arrow, OpenHead, HoverTool, Text, 
-Square, SquarePin)
+CustomJS, TapTool, SquarePin)
 from bokeh.palettes import PiYG8
 from bokeh.transform import linear_cmap
 from bokeh.layouts import row, column
@@ -16,6 +17,19 @@ from .analyzesweep import (read_analyzed_sweep, get_gene_info,
                            get_flags_for_gene)
 from .analyzeinsertions import (get_exon_regions, read_gene_insertions, 
                                 get_gene_positions)
+
+def remove_grid_and_ticks(plot):
+        plot.xgrid.grid_line_color = None
+        plot.xaxis.major_tick_line_color = None
+        plot.xaxis.minor_tick_line_color = None
+        plot.xaxis.major_label_text_color = None
+        plot.xaxis.axis_line_color = None
+        plot.ygrid.grid_line_color = None
+        plot.yaxis.major_tick_line_color = None
+        plot.yaxis.minor_tick_line_color = None
+        plot.yaxis.major_label_text_color = None
+        plot.yaxis.axis_line_color = None
+        plot.outline_line_color = None
 
 
 def plot_insertions(gene, params, data_dir, gene_pos = None):
@@ -38,12 +52,14 @@ def plot_insertions(gene, params, data_dir, gene_pos = None):
     ylim = (0, 18 + len(gene_pos))
 
     plt = figure(title=f'Insertions in gene: {gene.upper()} - '
-                    f'Screen: {params["screen_name"]}',
+                       f'Screen: {params["screen_name"]}',
                 x_axis_label='Position (bp)',
                 plot_width=1000,
                 plot_height=400,
                 x_range=(xlim[0]-padd*0.1, xlim[1] + padd*0.1),
-                y_range=ylim
+                y_range=ylim,
+                toolbar_location=None,
+                margin=(40, 0, 0, 0)
                 )
 
     plt.ygrid.grid_line_color = None
@@ -58,13 +74,13 @@ def plot_insertions(gene, params, data_dir, gene_pos = None):
     else:
         plt.xaxis.major_label_overrides = {0: 'tx End'}
 
-    plt.yaxis.ticker = [1, 2, 4, 5, 10, 15]
+    plt.yaxis.ticker = [1, 2, 4, 5, 10, 16]
     plt.yaxis.major_label_overrides = {1: 'Low anti-sense',
                                     2: 'High anti-sense',
                                     4: 'Low sense',
                                     5: 'High sense',
                                     10: 'Sense insertion density',
-                                    15: 'Transcript(s)'}
+                                    16: 'Transcript(s)'}
 
     plt.line(x=xlim, y=[1, 1], color='#BCBCBF', line_width=2)
     plt.line(x=xlim, y=[2, 2], color='#BCBCBF', line_width=2)
@@ -157,7 +173,7 @@ def plot_insertions(gene, params, data_dir, gene_pos = None):
 
     # Plot insertions
     plt.dash(x='xpos', y='ypos', color='color', source=source,
-            angle=pi/2, line_width = 2, size=12,)
+            angle=pi/2, line_width = 1, size=12,)
 
     #endregion
 
@@ -180,13 +196,20 @@ def plot_insertions(gene, params, data_dir, gene_pos = None):
 
     norm_dens = dict()
     for key in dens_dict.keys():
-        norm_dens[key] = dens_dict[key]*ins_count[key]/max(ins_count.values())
+
+        # Normalize according to channel with most counts
+        # norm_dens[key] = dens_dict[key]*ins_count[key]/max(ins_count.values())
+
+        # Normalize according to max per channel
+        norm_dens[key] = dens_dict[key]/max(dens_dict[key])
+
         dens_col = ins_colors[f'{key[0][0]}s']
         plt.line(x=x, y=norm_dens[key] + dens_off, 
                  color=dens_col, line_width=2)
 
-    dens_diff = dens_off + norm_dens['high'] - norm_dens['low']
-    plt.line(x=x, y=dens_diff, color='#7450A2', line_width=2)
+    # Plot difference
+    # dens_diff = dens_off + norm_dens['high'] - norm_dens['low']
+    # plt.line(x=x, y=dens_diff, color='#7450A2', line_width=2)
 
     #endregion
 
@@ -196,15 +219,21 @@ def plot_insertions(gene, params, data_dir, gene_pos = None):
 def plot_sweep(gene, params, data_dir, grouped_sweep = None, 
                plot_flags = None):
 
-    plot_flags = plot_flags or 1
-
+    if plot_flags is None:
+        plot_flags = 1
+    
     if not isinstance(grouped_sweep, pd.core.groupby.generic.DataFrameGroupBy):
         print('Loading sweep data.')
         grouped_sweep = read_analyzed_sweep(data_dir, params)
 
     gene_info = get_gene_info(gene, grouped_sweep)
-    
-    palette = PiYG8[::-1]
+
+    # Color palette from matplotlib
+    cmap = cm.get_cmap('PiYG', 256)
+    PiYG256 = tuple(colors.rgb2hex(cmap(i)[:3]) for i in range(cmap.N))
+    palette = PiYG256
+
+    # palette = PiYG8[::-1]
     plot_width = 600
 
     # Arrange data to plot ----------------------------------------------------
@@ -239,11 +268,12 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
                 x_axis_label='End offset (bp)',
                 y_axis_label='Start offset (bp)',
                 plot_width=plot_width,
-                plot_height=plot_width-15,
+                plot_height=plot_width,
                 match_aspect=True,
                 aspect_scale=1,
                 x_range=xlim,
-                y_range=ylim
+                y_range=ylim,
+                toolbar_location=None
                 )
 
     # Rename 0 to position (tx, cds end,start)
@@ -271,8 +301,10 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
 
                                         ('\u0394 log2MI srt', '@sl_sdir'),
                                         ('\u0394 log2MI end', '@sl_edir'),
-                                        ('\u0394 log10p srt', '@p_ratio_sdir'),
-                                        ('\u0394 log10p end', '@p_ratio_edir'),
+                                        # ('min p srt', '@p_min_sdir'),
+                                        # ('min p end', '@p_min_edir'),
+                                        # ('\u0394 log10p srt', '@p_ratio_sdir'),
+                                        # ('\u0394 log10p end', '@p_ratio_edir'),
 
                                         ],
                             names=['datapoints']
@@ -290,18 +322,21 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
         # p_thr = 0.00001
         flags = get_flags_for_gene(gene, grouped_sweep)
 
-        f_col = ['#EBECEF', '#BCBCBF']
+        f_col = ['#b9babd', '#848587']
 
-        flg_s_src = flags[0].reset_index()
-        flg_e_src = flags[1].reset_index()
-
-        flg_s_source = ColumnDataSource(flg_s_src)
-        plt.square(x='end_off', y='srt_off', source=flg_s_source, size=21,
-                line_color=f_col[0], fill_color=f_col[0], line_width=2)
+        if not flags[0].empty:
+            flg_s_src = flags[0].reset_index()
+            flg_s_source = ColumnDataSource(flg_s_src)
+            plt.square(x='end_off', y='srt_off', source=flg_s_source, size=18,
+                    line_color=f_col[0], fill_color=f_col[0], line_width=2,
+                    alpha=0.8, line_alpha=0.7)
         
-        flg_e_source = ColumnDataSource(flg_e_src)
-        plt.square(x='end_off', y='srt_off', source=flg_e_source, size=21,
-                line_color=f_col[1], fill_color=f_col[1], line_width=2)
+        if not flags[1].empty:
+            flg_e_src = flags[1].reset_index()
+            flg_e_source = ColumnDataSource(flg_e_src)
+            plt.square(x='end_off', y='srt_off', source=flg_e_source, size=18,
+                    line_color=f_col[1], fill_color=f_col[1], line_width=2,
+                    alpha=0.8, line_alpha=0.7)
 
     #endregion
 
@@ -322,19 +357,6 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
 
     # Legend ------------------------------------------------------------------
     #region -------------------------------------------------------------------
-
-    def remove_grid_and_ticks(plot):
-        plot.xgrid.grid_line_color = None
-        plot.xaxis.major_tick_line_color = None
-        plot.xaxis.minor_tick_line_color = None
-        plot.xaxis.major_label_text_color = None
-        plot.xaxis.axis_line_color = None
-        plot.ygrid.grid_line_color = None
-        plot.yaxis.major_tick_line_color = None
-        plot.yaxis.minor_tick_line_color = None
-        plot.yaxis.major_label_text_color = None
-        plot.yaxis.axis_line_color = None
-        plot.outline_line_color = None
 
     # Color legend
     col_leg = figure(title='Log2 (MI)',
@@ -395,21 +417,22 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
                 plot_width=200, plot_height=120,
                 toolbar_location=None)
     remove_grid_and_ticks(flag_leg)
+    flag_leg.circle(x=[0],y=[0], color=None)
 
     if plot_flags:
         t = Title()
-        t.text = 'Flags legend'
+        t.text = 'Flags'
         flag_leg.title = t
         x = [1]*2
         y = [i*40 + 30 for i in range(0,2)]
         size = [20, 20]
-        txt = ['Flag start (y) dir', 'Flag end (x) dir']
+        txt = ['Flag start direction', 'Flag end direction']
 
         f_leg_source = ColumnDataSource(dict(x=x, y=y, text=txt, 
                                             size=size, fill=f_col))
 
         flag_leg.square(x='x', y='y', size='size', source=f_leg_source,
-                fill_color='fill', line_color='fill')
+                fill_color='fill', line_color='fill', alpha=0.8)
         glyph = Text(x='x', y='y', text='text', text_font_size='10pt',
                 x_offset=15, y_offset=7)
         flag_leg.add_glyph(f_leg_source, glyph)
@@ -427,3 +450,64 @@ def plot_sweep(gene, params, data_dir, grouped_sweep = None,
     return layout, src, plt
 
     #endregion
+
+
+def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, ins_data_dir):
+
+    gene = gene.upper()
+
+    gene_pos = get_gene_positions(gene, params['assembly'])
+    sweep_layout, sweep_src, sweep_plt = plot_sweep(gene, params, 
+                                                    data_dir, grouped_sweep,
+                                                    plot_flags=1)
+    ins = plot_insertions(gene, params, ins_data_dir, gene_pos)
+
+    t = Title()
+    t.text = ''
+    ins.title = t
+
+    # Get actual end position (rather than just end offset)
+    tx_pos = (min(gene_pos['txStart']), max(gene_pos['txEnd']))
+
+    if gene_pos['strand'].iloc[0] == '+':
+        sweep_src['start_pos'] = sweep_src['srt_off']
+        sweep_src['end_pos'] = sweep_src.eval('@tx_pos[1] + end_off - @tx_pos[0]')
+    else:
+        sweep_src['end_pos'] = -sweep_src['end_off']
+        sweep_src['start_pos'] = sweep_src.eval('@tx_pos[1] - srt_off '
+                                                '- @tx_pos[0]')
+
+    rect_src = ColumnDataSource({'x': [0, tx_pos[1]-tx_pos[0],
+                                    tx_pos[1]-tx_pos[0], 0], 
+                                 'y': [0,0,6,6]})
+    rect = ins.patch(x='x', y='y', fill_color='gray', source=rect_src, 
+                     line_color=None, alpha=0.15)
+    rect.visible = False
+
+    code = '''
+    rect.visible = true;
+    var idx = cb_data.source.selected.indices;
+
+    var s = sweep.data['start_pos'][idx]
+    var e = sweep.data['end_pos'][idx]
+
+    rect.data_source.data['x'] = [e, s, s, e]
+    rect.data_source.change.emit(); 
+
+    console.log('Tap: ' + s + ' ' + e)
+    '''
+
+    sweep_source = ColumnDataSource(sweep_src[['start_pos', 'end_pos']])
+    sweep_plt.add_tools(TapTool(names=['datapoints']))
+    sweep_plt.select(TapTool).callback = CustomJS(args={'sweep': sweep_source,
+                                                        'rect': rect}, 
+                                                  code=code)
+
+    # fig = row(dummy, sweep_layout)
+    # col = column(fig, ins)
+    # col = column(sweep_layout, ins)
+
+    # output_file('plots/test_plot.html')
+    # show(col)
+
+    return sweep_layout, ins

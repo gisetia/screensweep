@@ -9,3 +9,7 @@ tests
 .DS_Store
 screen-analyzer.conf
 stuff.txt
+
+demos.py
+tests.py
+tests_plot_transcripts.py

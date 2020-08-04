@@ -129,21 +129,44 @@ def write_sweep_data(data_dir: str, sweep_data: pd.DataFrame,
                       - gene_data['log2_mi'].shift(1, 
                                              axis=1))/(params['step']*0.001)
 
-        # Get log10 of ratio of p values when changing parameters in 
-        # both directions (per 1,000 bp)
-        gene_data['p_fdr'] = gene_data['p_fdr'].replace(0, 1e-300)
-        p_ratio_sdir = ((gene_data['p_fdr']/
-                        gene_data['p_fdr'].shift(1)).applymap(log10)
-                        /(params['step']*0.001))
-        p_ratio_edir = ((gene_data['p_fdr']/
-                        gene_data['p_fdr'].shift(1, axis=1)).applymap(log10)
-                        /(params['step']*0.001))
+        # # Get log10 of ratio of p values when changing parameters in 
+        # # both directions (per 1,000 bp)
+        # gene_data['p_fdr'] = gene_data['p_fdr'].replace(0, 1e-300)
+        # p_ratio_sdir = ((gene_data['p_fdr']/
+        #                 gene_data['p_fdr'].shift(1)).applymap(log10)
+        #                 /(params['step']*0.001))
+        # p_ratio_edir = ((gene_data['p_fdr']/
+        #                 gene_data['p_fdr'].shift(1, axis=1)).applymap(log10)
+        #                 /(params['step']*0.001))
 
+        # Get minimum p-value between consecutive parameters in both start 
+        # and end directions
+        shift_sdir = gene_data['p_fdr'].shift(1)
+        shift_sdir.columns = pd.MultiIndex.from_arrays(
+                    [tuple('p_shift_sdir' for x in shift_sdir.columns), 
+                    tuple(x for x in shift_sdir.columns)])
+        gene_data = pd.concat([gene_data, shift_sdir], ignore_index=False,
+                              axis=1)
+
+        shift_edir = gene_data['p_fdr'].shift(1, axis=1)
+        shift_edir.columns = pd.MultiIndex.from_arrays(
+                    [tuple('p_shift_edir' for x in shift_edir.columns), 
+                    tuple(x for x in shift_edir.columns)])
+        gene_data = pd.concat([gene_data, shift_edir], ignore_index=False,
+                              axis=1)
+
+        # Stack data and add columns
         gene_data = gene_data.stack()
+        gene_data['p_min_sdir'] = gene_data[['p_fdr', 
+                                              'p_shift_sdir']].min(axis=1)
+        gene_data['p_min_edir'] = gene_data[['p_fdr', 
+                                              'p_shift_edir']].min(axis=1)
+        gene_data = gene_data.drop(columns=['p_shift_sdir', 'p_shift_edir'])
+
         gene_data['sl_sdir'] = slope_sdir.stack()
         gene_data['sl_edir'] = slope_edir.stack()
-        gene_data['p_ratio_sdir'] = p_ratio_sdir.stack()
-        gene_data['p_ratio_edir'] = p_ratio_edir.stack()
+        # gene_data['p_ratio_sdir'] = p_ratio_sdir.stack()
+        # gene_data['p_ratio_edir'] = p_ratio_edir.stack()
     
         gene_info[name] = gene_data
 
@@ -215,13 +238,8 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
 
     flagged_sdir = dict()
     flagged_edir = dict()
+    ct = 0
     for name, group in grouped_sweep:
-
-        p_next_sdir = group['p_fdr'].shift(1)
-        group['min_p_sdir'] = min(group['p_fdr'],p_next_sdir)
-        
-        
-        # group['min_p_edir'] = min(group['p_fdr'], group['p_fdr'].shift(1), axis=1)
 
         if not group.query('p_fdr < @p_thr').empty:
 
@@ -229,14 +247,18 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
             flags_edir = group.query(flags_query('end'))
 
             if not flags_sdir.empty:
-                print('start dir - ', name)
+                # print('start dir - ', name)
                 flagged_sdir[name] = flags_sdir
 
             if not flags_edir.empty:
-                print('end dir - ', name)
+                # print('end dir - ', name)
                 flagged_edir[name] = flags_edir
 
-    print(f'\n# start flags: {len(flagged_sdir)} -- '
+            if not flags_sdir.empty or not flags_edir.empty:
+                ct += 1
+                print(f'Flagged: {name}')
+
+    print(f'\n# flagged genes: {ct} -- # start flags: {len(flagged_sdir)} -- '
           f'# end flags: {len(flagged_edir)}')
 
     return (flagged_sdir, flagged_edir)
@@ -246,20 +268,21 @@ def get_flags_for_gene(gene: str,
                        grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
                        p_thr: Optional[float] = None,
                        slope_thr: Optional[float] = None, 
-                       p_ratio_thr: Optional[float] = None) -> Union[Tuple[
-                                              Dict[str, pd.DataFrame], 
-                                              Dict[str, pd.DataFrame]], None]:
+                       p_ratio_thr: Optional[float] = None) -> Tuple[
+                                              pd.DataFrame, pd.DataFrame]:
 
     p_thr = p_thr or 0.00001
-    slope_thr = slope_thr or 4
+    slope_thr = slope_thr or 2
     p_ratio_thr = p_ratio_thr or 20
 
     gene_info = get_gene_info(gene, grouped_sweep).stack()
+    flags_sdir = pd.DataFrame()
+    flags_edir = pd.DataFrame()
     if not gene_info.query('p_fdr < @p_thr').empty:
         flags_sdir = gene_info.query(flags_query('start'))
         flags_edir = gene_info.query(flags_query('end'))
     
-        return (flags_sdir, flags_edir)
+    return (flags_sdir, flags_edir)
 
 
 def flags_query(param: str) -> str:
@@ -271,6 +294,9 @@ def flags_query(param: str) -> str:
     #      f'| abs(p_ratio_{param[0]}dir) > @p_ratio_thr')
 
     # q = (f'abs(sl_{param[0]}dir) > @slope_thr')
-    q = (f'abs(p_ratio_{param[0]}dir) > @p_ratio_thr')
+    # q = (f'abs(p_ratio_{param[0]}dir) > @p_ratio_thr')
+
+    q = (f'abs(sl_{param[0]}dir) > @slope_thr '
+         f'& p_min_{param[0]}dir < @p_thr')
 
     return q

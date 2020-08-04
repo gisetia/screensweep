@@ -8,7 +8,7 @@ from importlib import reload
 reload(tls)
 
 # Define parameters of screen to read
-params = {'screen_name': 'PDL1_IFNg',
+params = {'screen_name': 'p-AKT',
         'assembly': 'hg38',
         'trim_length': '50',
         'mode': 'collapse',
@@ -28,7 +28,7 @@ grouped_sweep = read_analyzed_sweep(data_dir, params)
 from importlib import reload
 reload(tls)
 
-slope_thr = 4
+slope_thr = 2
 p_ratio_thr = 10
 p_thr = 1e-5
 flagged_genes = tls.analyzesweep.get_flagged_genes(grouped_sweep, p_thr, 
