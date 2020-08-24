@@ -6,6 +6,7 @@ from itertools import groupby
 from operator import itemgetter
 from .utils import timer
 
+
 @dataclass
 class Insertion:
     ch: str
@@ -14,22 +15,24 @@ class Insertion:
     pos: int
     dir: Union[None, str] = None
 
+
 class CInsertion(Structure):
     _fields_ = [('c', c_int8),
                 ('s', c_char),
                 ('p', c_int32)]
 
+
 @timer
 def read_all_insertions(data_dir: str, params: dict) -> List[Insertion]:
-    '''Reads insertion binary C files and returns the data as a list of 
+    '''Reads insertion binary C files and returns the data as a list of
     Insertion classes.
     '''
 
     data_path = (f'''{data_dir}/{params['screen_name']}/'''
-                f'''{params['assembly']}/{params['trim_length']}/''')
+                 f'''{params['assembly']}/{params['trim_length']}/''')
 
-    keys = [x for x in list(range(0,26)) if not x == 23]
-    values = [f'chr{i}' for i in range(0,23)] + ['chrX'] + ['chrY']
+    keys = [x for x in list(range(0, 26)) if not x == 23]
+    values = [f'chr{i}' for i in range(0, 23)] + ['chrX'] + ['chrY']
     chr_dict = dict(zip(keys, values))
 
     channels = ['high', 'low']
@@ -41,13 +44,13 @@ def read_all_insertions(data_dir: str, params: dict) -> List[Insertion]:
         with open(filename, 'rb') as file:
             c_ins = CInsertion()
             while file.readinto(c_ins) == sizeof(c_ins):
-                ins = Insertion(c, chr_dict[c_ins.c], 
+                ins = Insertion(c, chr_dict[c_ins.c],
                                 str(c_ins.s, 'utf-8'), c_ins.p)
                 insertions.append(ins)
 
     return insertions
 
-# @timer
+
 def get_gene_positions(gene: str, assembly: str) -> pd.DataFrame:
     '''Returns data from refseq file as dataframe.
     '''
@@ -63,12 +66,59 @@ def get_gene_positions(gene: str, assembly: str) -> pd.DataFrame:
 
     return gene_data
 
+
+def read_insertions(data_dir: str, screen_name: str, assembly: str,
+                    trim_length: int, chrom: str, start: int,
+                    end: Optional[int] = None,
+                    padd: Optional[int] = 0) -> pd.DataFrame:
+    '''Returns dataframe with insertion info for the given chromosome and
+    interval defined by start and end:
+    chan	chr	    strand	    pos
+    high	chr9	-	    	4983150
+    high	chr9	+	    	4983164
+    '''
+
+    end = end or start
+
+    start = start - padd
+    end = end + padd
+
+    data_path = (f'''{data_dir}/{screen_name}/'''
+                 f'''{assembly}/{trim_length}/''')
+
+    keys = [x for x in list(range(0, 26)) if not x == 23]
+    values = [f'chr{i}' for i in range(0, 23)] + ['chrX'] + ['chrY']
+    chr_dict = dict(zip(keys, values))
+
+    channels = ['high', 'low']
+
+    insertions = []
+    for c in channels:
+        filename = f'{data_path}{c}'
+
+        with open(filename, 'rb') as file:
+            c_ins = CInsertion()
+            while file.readinto(c_ins) == sizeof(c_ins):
+                if (chr_dict[c_ins.c] == f'chr{chrom}'
+                    and c_ins.p > start
+                        and c_ins.p < end):
+
+                    ins = [c, chr_dict[c_ins.c],
+                           str(c_ins.s, 'utf-8'), c_ins.p]
+                    insertions.append(ins)
+
+    insertions = pd.DataFrame(insertions, columns=['chan', 'chr',
+                                                   'strand', 'pos'])
+
+    return insertions
+
+
 @timer
 def read_gene_insertions(gene: str, data_dir: str, params: dict,
                          gene_pos: Optional[pd.DataFrame] = None,
                          padding: Optional[int] = None) -> \
-                         pd.DataFrame:
-    '''Returns dataframe with insertion info, eg.:
+        pd.DataFrame:
+    '''Returns dataframe with insertion info for the given gene, eg.:
     chan	chr	    strand	dir	        pos
     high	chr9	-	    antisense	4983150
     high	chr9	+	    sense	    4983164
@@ -93,10 +143,10 @@ def read_gene_insertions(gene: str, data_dir: str, params: dict,
     gene_strand = gene_pos['strand'].iloc[0]
 
     data_path = (f'''{data_dir}/{params['screen_name']}/'''
-                f'''{params['assembly']}/{params['trim_length']}/''')
+                 f'''{params['assembly']}/{params['trim_length']}/''')
 
-    keys = [x for x in list(range(0,26)) if not x == 23]
-    values = [f'chr{i}' for i in range(0,23)] + ['chrX'] + ['chrY']
+    keys = [x for x in list(range(0, 26)) if not x == 23]
+    values = [f'chr{i}' for i in range(0, 23)] + ['chrX'] + ['chrY']
     chr_dict = dict(zip(keys, values))
 
     channels = ['high', 'low']
@@ -108,16 +158,16 @@ def read_gene_insertions(gene: str, data_dir: str, params: dict,
         with open(filename, 'rb') as file:
             c_ins = CInsertion()
             while file.readinto(c_ins) == sizeof(c_ins):
-                if (chr_dict[c_ins.c] == chrom 
+                if (chr_dict[c_ins.c] == chrom
                     and c_ins.p > min_pos
-                    and c_ins.p < max_pos):
+                        and c_ins.p < max_pos):
 
-                    ins = [c, chr_dict[c_ins.c], 
+                    ins = [c, chr_dict[c_ins.c],
                            str(c_ins.s, 'utf-8'),
-                           ('sense' if str(c_ins.s, 'utf-8') == gene_strand 
-                           else 'antisense'), c_ins.p,]
+                           ('sense' if str(c_ins.s, 'utf-8') == gene_strand
+                            else 'antisense'), c_ins.p, ]
                     insertions.append(ins)
-    
+
     insertions = pd.DataFrame(insertions, columns=['chan', 'chr', 'strand',
                                                    'dir', 'pos'])
 
@@ -134,7 +184,7 @@ def contig_list_lims(lst):
         lims.append([x[0], x[-1]])
     return lims
 
-# @timer
+
 def get_exon_regions(gene_pos: Optional[pd.DataFrame] = None,
                      gene: Optional[str] = None,
                      assembly: Optional[str] = None) -> pd.DataFrame:
@@ -156,34 +206,34 @@ def get_exon_regions(gene_pos: Optional[pd.DataFrame] = None,
     exon = exon.reset_index(drop=True)
     exon['tx_id'] = exon.index + 1
 
-    cols = ['exonStarts','exonEnds']
+    cols = ['exonStarts', 'exonEnds']
     exon[cols] = exon[cols].applymap(lambda x: x.split(','))
 
-    exon['cdsRange'] = exon.apply(lambda x: range(x.cdsStart, x.cdsEnd), 
+    exon['cdsRange'] = exon.apply(lambda x: range(x.cdsStart, x.cdsEnd),
                                   axis=1)
-    exon['exonRange'] = exon.apply(lambda t: [range(int(x),int(y)) for i,x 
-                            in enumerate(t['exonStarts']) for j,y 
-                            in enumerate(t['exonEnds']) if i == j and x != ''
-                            and y != ''], axis=1)
+    exon['exonRange'] = exon.apply(lambda t: [range(int(x), int(y)) for i, x
+                                              in enumerate(t['exonStarts']) for j, y
+                                              in enumerate(t['exonEnds']) if i == j and x != ''
+                                              and y != ''], axis=1)
 
     exon = exon.explode('exonRange')
     exon = exon.reset_index(drop=True)
     exon['exon_id'] = exon.index + 1
-    exon = exon.drop(columns=['#bin', 'exonStarts', 'exonEnds', 'score', 
-                            'cdsStartStat', 'cdsEndStat', 'exonFrames', 
-                            'cdsStart', 'cdsEnd'])
+    exon = exon.drop(columns=['#bin', 'exonStarts', 'exonEnds', 'score',
+                              'cdsStartStat', 'cdsEndStat', 'exonFrames',
+                              'cdsStart', 'cdsEnd'])
 
-    exon['exCds_lst'] = exon.apply(lambda t: [x for x in t.exonRange 
-                                if x in t.cdsRange], axis=1)
-    exon['exUtr_lst'] = exon.apply(lambda t: [x for x in t.exonRange 
-                                if not x in t.cdsRange], axis=1)
+    exon['exCds_lst'] = exon.apply(lambda t: [x for x in t.exonRange
+                                              if x in t.cdsRange], axis=1)
+    exon['exUtr_lst'] = exon.apply(lambda t: [x for x in t.exonRange
+                                              if not x in t.cdsRange], axis=1)
 
     exon['exCds'] = exon.apply(lambda t: contig_list_lims(t.exCds_lst), axis=1)
     exon['exUtr'] = exon.apply(lambda t: contig_list_lims(t.exUtr_lst), axis=1)
 
-    exon_regions = exon.melt(id_vars=['name2', 'name','exon_id', 'tx_id'],
-                            value_vars=['exCds','exUtr'], 
-                            var_name='reg_type', value_name='reg_lims')
+    exon_regions = exon.melt(id_vars=['name2', 'name', 'exon_id', 'tx_id'],
+                             value_vars=['exCds', 'exUtr'],
+                             var_name='reg_type', value_name='reg_lims')
     exon_regions = exon_regions.explode('reg_lims').dropna()
-    
+
     return exon_regions
