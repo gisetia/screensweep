@@ -1,30 +1,18 @@
 # %%
-# from bokeh.layouts import row, column
-from bokeh.models import NumeralTickFormatter, Range1d, LinearAxis
+import pandas as pd
 from bokeh.transform import linear_cmap
-from bokeh.palettes import PiYG8
-from bokeh.models import (ColumnDataSource, Arrow, OpenHead, HoverTool, Text,
-                          CustomJS, TapTool, SquarePin, CrosshairTool,
-                          Rect, RangeTool, Text)
+from bokeh.models import (ColumnDataSource, Text)
 from bokeh.plotting import figure, output_file, show, curdoc
 from bokeh.layouts import column, row
-from bokeh.transform import linear_cmap
-
-from bokeh.palettes import PiYG8
 from matplotlib import cm, colors
-
-from typing import List, Union, Optional
-
-from math import pi
-import pandas as pd
 from math import log2
 from scipy.stats import fisher_exact
 
-# from tools.plots import plot_insertions, ins_select_range
+from tools.plotting.insertionsrange import plot_insertions, ins_select_range
 
-import tools as tls
-from importlib import reload
-reload(tls)
+# import tools as tls
+# from importlib import reload
+# reload(tls)
 
 data_dir = 'data/screen-analyzer-data'
 chrom = '9'
@@ -59,15 +47,14 @@ assembly = 'hg19'
 trim_length = 50
 
 
-ins = tls.plots.plot_insertions(data_dir, screen_name, assembly,
-                                trim_length, chrom, start, end, 200000)
-select = tls.plots.ins_select_range(ins)
+ins = plot_insertions(data_dir, screen_name, assembly,
+                      trim_length, chrom, start, end, 200000)
+select = ins_select_range(ins)
 
 
 def get_ratios(insertions, start, end):
 
     ins_sel = insertions[insertions.pos.between(start, end)]
-
     counts_per_strand = ins_sel.groupby(['chan', 'strand']).size()
 
     # Get counts for each channel and strand, set to 1 if no counts

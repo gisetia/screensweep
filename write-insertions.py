@@ -1,6 +1,6 @@
 # %%
 
-from tools.analyzeinsertions import write_insertions
+from tools.analyzeinsertions import read_insertions, write_insertions
 
 screen_name = 'PDL1_IFNg'
 assembly = 'hg38'
@@ -12,4 +12,5 @@ outdata_dir = 'data/analyzed-data'
 insertions = write_insertions(indata_dir, outdata_dir, screen_name,
                               assembly, trim_length)
 
+insertions = read_insertions(outdata_dir, screen_name, assembly, trim_length)
 # %%

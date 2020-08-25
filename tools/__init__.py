@@ -1,8 +1,8 @@
 from . import analyzesweep
-from . import plots
 from . import analyzeinsertions
+from .plotting import sweepplots
 
 from importlib import reload
 reload(analyzesweep)
-reload(plots)
 reload(analyzeinsertions)
+reload(sweepplots)

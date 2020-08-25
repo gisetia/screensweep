@@ -4,21 +4,19 @@ from math import pi, ceil
 from numpy import interp
 from scipy import stats
 from matplotlib import cm, colors
-from typing import Optional
 
-from bokeh.plotting import figure, output_file, show
+from bokeh.plotting import figure
 from bokeh.models import (ColumnDataSource, Arrow, OpenHead, HoverTool, Text,
-                          CustomJS, TapTool, SquarePin, CrosshairTool,
-                          RangeTool, Range1d, LinearAxis, NumeralTickFormatter)
+                          CustomJS, TapTool, SquarePin)
 from bokeh.palettes import PiYG8
 from bokeh.transform import linear_cmap
 from bokeh.layouts import row, column
 from bokeh.models.annotations import Title
 
-from .analyzesweep import (read_analyzed_sweep, get_gene_info,
-                           get_flags_for_gene)
-from .analyzeinsertions import (get_exon_regions, read_gene_insertions,
-                                get_gene_positions, read_insertions_region)
+from ..analyzesweep import (read_analyzed_sweep, get_gene_info,
+                            get_flags_for_gene)
+from ..analyzeinsertions import (get_exon_regions, read_gene_insertions,
+                                 get_gene_positions)
 
 
 def remove_grid_and_ticks(plot):
@@ -47,7 +45,7 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
     exons = get_exon_regions(gene_pos)
 
     # Plot setup --------------------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     zero = min(gene_pos['txStart'])
     xlim = (min(gene_pos['txStart']) - padd - zero,
@@ -93,7 +91,7 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
     # endregion
 
     # Plot transcripts --------------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     # Plot dashed lines where transcript(s) end(s)
     plt.line(x=(xlim[0]+padd, xlim[0]+padd), y=ylim, color='#E2E2E4',
@@ -148,7 +146,7 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
     # endregion
 
     # Plot insertions ---------------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     # Transform data source for insertions
     ins_colors = {'hs': PiYG8[0],
@@ -182,8 +180,8 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
 
     # endregion
 
-    # Plot insertion density ------------------------------------------------------
-    # region -------------------------------------------------------------------
+    # Plot insertion density --------------------------------------------------
+    # region ------------------------------------------------------------------
 
     dens_off = 10
     x = range(xlim[0], xlim[-1] + 1, 10)
@@ -203,7 +201,8 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
     for key in dens_dict.keys():
 
         # Normalize according to channel with most counts
-        # norm_dens[key] = dens_dict[key]*ins_count[key]/max(ins_count.values())
+        # norm_dens[key] = (dens_dict[key]*ins_count[key]
+        #                   / max(ins_count.values()))
 
         # Normalize according to max per channel
         norm_dens[key] = dens_dict[key]/max(dens_dict[key])
@@ -242,7 +241,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     plot_width = 600
 
     # Arrange data to plot ----------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     src = gene_info.stack().reset_index()
 
@@ -253,23 +252,24 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     # Rescale log2 MI to get nice sizes in plot
     min_size = plot_width/100
     max_size = plot_width/38
-    src['log2_mi_rescaled'] = src['log2_mi'].map(lambda x: interp(abs(x),
-                                                                  (0, 8),
-                                                                  (min_size,
-                                                                   max_size)))
+    src['log2_mi_rescaled'] = (src['log2_mi']
+                               .map(lambda x: interp(abs(x), (0, 8),
+                                                     (min_size, max_size))))
 
     source = ColumnDataSource(src)
     # endregion
 
     # Set plot properties -----------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     # Axes ranges
     padd = ceil(params['step']/1.5)
     xlim = (-10000 - padd, 2000 + padd)
     ylim = (10000 + padd, -2000 - padd)
 
-    plt = figure(title=f'Gene: {gene.upper()} - Screen: {params["screen_name"]}',
+    plt = figure(title=(f'Gene: {gene.upper()} - '
+                        f'Screen: {params["screen_name"]} - '
+                        f'Assembly: {params["assembly"]} '),
                  x_axis_label='End offset (bp)',
                  y_axis_label='Start offset (bp)',
                  plot_width=plot_width,
@@ -301,18 +301,12 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
                                       ('High counts', '@high_counts'),
                                       ('Low counts', '@low_counts'),
                                       ('P-value', '@p_fdr'),
-
-                                      #   ('\u0394 log2MI srt', '@sl_sdir'),
-                                      #   ('\u0394 log2MI end', '@sl_edir'),
+                                      # ('\u0394 log2MI srt', '@sl_sdir'),
+                                      # ('\u0394 log2MI end', '@sl_edir'),
                                       # ('min p srt', '@p_min_sdir'),
                                       # ('min p end', '@p_min_edir'),
-                                      # ('\u0394 log10p srt', '@p_ratio_sdir'),
-                                      # ('\u0394 log10p end', '@p_ratio_edir'),
-
                                       ],
-                            names=['datapoints']
-                            #  show_arrow=False
-                            ))
+                            names=['datapoints']))
     # endregion
 
     # Plot flags --------------------------------------------------------------
@@ -348,7 +342,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     # endregion
 
     # Plot data ---------------------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     plt.circle(x='end_off', y='srt_off', source=source,
                size='log2_mi_rescaled', line_width=3,
@@ -363,7 +357,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     # endregion
 
     # Legend ------------------------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     # Color legend
     col_leg = figure(title='Log2 (MI)',
@@ -432,7 +426,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
         x = [1]
         y = [70]
         size = [20]
-        txt = [f'\u0394 log2MI > {slope_thr} per 1kb']
+        txt = [f'\u0394 log2MI > {slope_thr} per 1kbp']
 
         f_leg_source = ColumnDataSource(dict(x=x, y=y, text=txt,
                                              size=size, fill=f_col))
@@ -446,7 +440,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     # endregion
 
     # Output ------------------------------------------------------------------
-    # region -------------------------------------------------------------------
+    # region ------------------------------------------------------------------
 
     # output_file('plots/test_plot.html')
     legend = column(col_leg, p_leg, flag_leg)
@@ -460,9 +454,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
 
 def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, insertions,
                        refseq):
-
     gene = gene.upper()
-
     gene_pos = get_gene_positions(gene, refseq)
     sweep_layout, sweep_src, sweep_plt = plot_sweep(gene, params,
                                                     data_dir, grouped_sweep,
@@ -511,144 +503,5 @@ def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, insertions,
                                                         'rect': rect},
                                                   code=code)
 
-    # fig = row(dummy, sweep_layout)
-    # col = column(fig, ins)
-    # col = column(sweep_layout, ins)
-
-    # output_file('plots/test_plot.html')
-    # show(col)
-
     return sweep_layout, ins
 
-
-def plot_insertions(data_dir: str, screen_name: str, assembly: str,
-                    trim_length: int, chrom: str, start: int,
-                    end: Optional[int] = None,
-                    padd: Optional[int] = None) -> figure:
-
-    padd = padd or 5000
-
-    insertions = read_insertions_region(data_dir, screen_name, assembly,
-                                        trim_length, chrom, start, end, padd)
-
-    ylim = (0, 6)
-    ins = figure(title=f'Insertions of screen {screen_name} in '
-                 f'chr{chrom}:{start:,} - {end:,}',
-                 plot_width=1000,
-                 plot_height=300,
-                 x_range=(start, end),
-                 y_range=ylim,
-                 tools='reset')
-    ins.ygrid.grid_line_color = None
-    ins.xgrid.grid_line_color = None
-    ins.yaxis.major_tick_line_color = None
-    ins.yaxis.minor_tick_line_color = None
-    ins.yaxis.axis_line_color = None
-    ins.outline_line_color = None
-    ins.xaxis.formatter = NumeralTickFormatter(format='0,0')
-    ins.yaxis.ticker = [1, 2, 4, 5, 10, 16]
-    ins.yaxis.major_label_overrides = {1: 'Low - strand',
-                                       2: 'Low + strand',
-                                       4: 'High - strand',
-                                       5: 'High + strand'}
-
-    # Transform data source for insertions
-    ins_colors = {'h+': PiYG8[0],
-                  'l+': PiYG8[-1],
-                  'h-': PiYG8[2],
-                  'l-': PiYG8[-3]}
-    ins_pos = {'h+': 5,
-               'l+': 2,
-               'h-': 4,
-               'l-': 1}
-
-    insertions['color'] = insertions.apply(lambda row:
-                                           ins_colors[row['chan']
-                                                      [0]+row['strand'][0]],
-                                           axis=1)
-    insertions['ypos'] = insertions.apply(lambda row: ins_pos[row['chan'][0]
-                                                              + row['strand'][0]],
-                                          axis=1)
-    insertions['xpos'] = insertions.apply(lambda row: row['pos'],
-                                          axis=1)
-    source_ins = ColumnDataSource(insertions)
-
-    # Plot insertions
-    x_line = (start - padd, end + padd)
-    ins.line(x=x_line, y=[1, 1], color='#BCBCBF', line_width=2, name='line')
-    ins.line(x=x_line, y=[2, 2], color='#BCBCBF', line_width=2)
-    ins.line(x=x_line, y=[4, 4], color='#BCBCBF', line_width=2)
-    ins.line(x=x_line, y=[5, 5], color='#BCBCBF', line_width=2)
-
-    ins.dash(x='xpos', y='ypos', color='color', source=source_ins,
-             angle=pi/2, line_width=1, size=15, name='insertions')
-
-    ins.line(x=(start, start), y=ylim, color='#E2E2E4', line_dash=[5, 2])
-    ins.line(x=(end, end), y=ylim, color='#E2E2E4', line_dash=[5, 2])
-
-    # Add dummy line for hover tool
-    x = list(range(start - padd, end + padd + 1))
-    y = [3 for i in x]
-    ins.line(x=x, y=y, line_color='white', name='needshover')
-
-    ins.add_tools(HoverTool(tooltips=[('Position', '$x{0,0}')], mode='vline',
-                            line_policy='nearest',
-                            names=['needshover']
-                            ),
-                  CrosshairTool(dimensions='height',
-                                line_color='#363638',
-                                line_width=1))
-
-    return ins
-
-
-def ins_select_range(ins: figure) -> figure:
-
-    line = [x for x in ins.renderers if x.name == 'line'][0]
-    x_range = line.data_source.data['x']
-
-    padd = ins.x_range.start - x_range[0]
-
-    select = figure(plot_height=150, plot_width=ins.frame_width,
-                    y_range=ins.y_range,
-                    x_range=x_range,
-                    margin=(40, 0, 0, 0),
-                    x_axis_location='above',
-                    x_axis_label='Absolute position',
-                    tools='', toolbar_location=None)
-    select.extra_x_ranges = {'relative_pos': Range1d(start=-padd,
-                                                     end=ins.x_range.end
-                                                     - ins.x_range.start+padd)}
-    select.add_layout(LinearAxis(x_range_name='relative_pos',
-                                 axis_label='Relative position'), 'below')
-    select.xaxis.formatter = NumeralTickFormatter(format='0,0')
-    select.yaxis.visible = False
-    select.xgrid.grid_line_color = None
-
-    # Plot insertions
-    select.line(x=x_range, y=[1, 1], color='#BCBCBF', line_width=1)
-    select.line(x=x_range, y=[2, 2], color='#BCBCBF', line_width=1)
-    select.line(x=x_range, y=[4, 4], color='#BCBCBF', line_width=1)
-    select.line(x=x_range, y=[5, 5], color='#BCBCBF', line_width=1)
-
-    source_ins = [x.data_source for x in ins.renderers
-                  if x.name == 'insertions'][0]
-    select.dash(x='xpos', y='ypos', color='color', source=source_ins,
-                angle=pi/2, line_width=1, size=5,)
-
-    select.line(x=(ins.x_range.start, ins.x_range.start),
-                y=(ins.y_range.start, ins.y_range.end),
-                color='#E2E2E4', line_dash=[5, 2])
-    select.line(x=(ins.x_range.end, ins.x_range.end),
-                y=(ins.y_range.start, ins.y_range.end),
-                color='#E2E2E4', line_dash=[5, 2])
-
-    select.ygrid.grid_line_color = None
-
-    range_tool = RangeTool(x_range=ins.x_range)
-    range_tool.overlay.fill_color = "navy"
-    range_tool.overlay.fill_alpha = 0.1
-    select.add_tools(range_tool)
-    select.toolbar.active_multi = range_tool
-
-    return select

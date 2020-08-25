@@ -4,10 +4,15 @@ from bokeh.plotting import figure, output_file, show, curdoc
 from bokeh.layouts import row, column
 from bokeh.models import AutocompleteInput, Div
 
-import tools as tls
+# import tools as tls
 
 from tools.analyzesweep import read_analyzed_sweep
 from tools.analyzeinsertions import read_insertions, read_refseq
+# from tools.plots import link_sweep_and_ins
+
+from tools.plotting.sweepplots import link_sweep_and_ins
+
+
 # from tools.utils import timer
 # from importlib import reload
 # reload(tls)
@@ -91,9 +96,8 @@ def load_gene(attr, old, new):
 def update_gene():
     txt_out.text = 'Finished loading gene.'
     gene = gene_menu.value
-    sweep, ins = tls.plots.link_sweep_and_ins(gene, grouped_sweep,
-                                              params, data_dir, insertions,
-                                              refseq)
+    sweep, ins = link_sweep_and_ins(gene, grouped_sweep, params,
+                                    data_dir, insertions, refseq)
     layout.children[0].children[1] = sweep
     layout.children[1] = ins
 
