@@ -18,7 +18,7 @@ from bokeh.models.annotations import Title
 from .analyzesweep import (read_analyzed_sweep, get_gene_info,
                            get_flags_for_gene)
 from .analyzeinsertions import (get_exon_regions, read_gene_insertions,
-                                get_gene_positions, read_insertions)
+                                get_gene_positions, read_insertions_region)
 
 
 def remove_grid_and_ticks(plot):
@@ -35,14 +35,14 @@ def remove_grid_and_ticks(plot):
     plot.outline_line_color = None
 
 
-def plot_transcripts(gene, params, data_dir, gene_pos=None):
+def plot_transcripts(gene, params, insertions, gene_pos=None):
 
-    if not isinstance(gene_pos, pd.DataFrame):
-        print('Loading gene positions.')
-        gene_pos = get_gene_positions(gene, params['assembly'])
+    # if not isinstance(gene_pos, pd.DataFrame):
+    #     print('Loading gene positions.')
+    #     gene_pos = get_gene_positions(gene, params['assembly'])
 
     padd = 2000
-    insertions = read_gene_insertions(gene, data_dir, params,
+    insertions = read_gene_insertions(gene, insertions,
                                       gene_pos=gene_pos, padding=padd)
     exons = get_exon_regions(gene_pos)
 
@@ -302,8 +302,8 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
                                       ('Low counts', '@low_counts'),
                                       ('P-value', '@p_fdr'),
 
-                                    #   ('\u0394 log2MI srt', '@sl_sdir'),
-                                    #   ('\u0394 log2MI end', '@sl_edir'),
+                                      #   ('\u0394 log2MI srt', '@sl_sdir'),
+                                      #   ('\u0394 log2MI end', '@sl_edir'),
                                       # ('min p srt', '@p_min_sdir'),
                                       # ('min p end', '@p_min_edir'),
                                       # ('\u0394 log10p srt', '@p_ratio_sdir'),
@@ -458,15 +458,16 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     # endregion
 
 
-def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, ins_data_dir):
+def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, insertions,
+                       refseq):
 
     gene = gene.upper()
 
-    gene_pos = get_gene_positions(gene, params['assembly'])
+    gene_pos = get_gene_positions(gene, refseq)
     sweep_layout, sweep_src, sweep_plt = plot_sweep(gene, params,
                                                     data_dir, grouped_sweep,
                                                     plot_flags=1)
-    ins = plot_transcripts(gene, params, ins_data_dir, gene_pos)
+    ins = plot_transcripts(gene, params, insertions, gene_pos)
 
     t = Title()
     t.text = ''
@@ -527,8 +528,8 @@ def plot_insertions(data_dir: str, screen_name: str, assembly: str,
 
     padd = padd or 5000
 
-    insertions = read_insertions(data_dir, screen_name, assembly,
-                                 trim_length, chrom, start, end, padd)
+    insertions = read_insertions_region(data_dir, screen_name, assembly,
+                                        trim_length, chrom, start, end, padd)
 
     ylim = (0, 6)
     ins = figure(title=f'Insertions of screen {screen_name} in '

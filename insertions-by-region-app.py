@@ -18,6 +18,7 @@ from typing import List, Union, Optional
 from math import pi
 import pandas as pd
 from math import log2
+from scipy.stats import fisher_exact
 
 # from tools.plots import plot_insertions, ins_select_range
 
@@ -29,8 +30,8 @@ data_dir = 'data/screen-analyzer-data'
 chrom = '9'
 
 # super enhancer
-# start = 5495000
-# end = 5505000
+start = 5495000
+end = 5505000
 
 
 # start = 5580709
@@ -44,9 +45,9 @@ chrom = '9'
 # start = 5450503
 # end = 5470567
 
-#jak2
-start = 4985033
-end = 5128183
+# jak2
+# start = 4985033
+# end = 5128183
 
 # start = 5492001
 # end = 5495000
@@ -59,12 +60,15 @@ trim_length = 50
 
 
 ins = tls.plots.plot_insertions(data_dir, screen_name, assembly,
-                                trim_length, chrom, start, end, 500000)
+                                trim_length, chrom, start, end, 200000)
 select = tls.plots.ins_select_range(ins)
 
 
-def get_ratios(insertions):
-    counts_per_strand = insertions.groupby(['chan', 'strand']).size()
+def get_ratios(insertions, start, end):
+
+    ins_sel = insertions[insertions.pos.between(start, end)]
+
+    counts_per_strand = ins_sel.groupby(['chan', 'strand']).size()
 
     # Get counts for each channel and strand, set to 1 if no counts
     cnts_per_strand = {'+h': counts_per_strand.get(('high', '+'), 1),
@@ -74,7 +78,7 @@ def get_ratios(insertions):
 
     # print(cnts_per_strand)
 
-    counts_both_strands = insertions.groupby(['chan']).size()
+    counts_both_strands = ins_sel.groupby(['chan']).size()
     cnts_both_strands = {'h': counts_both_strands.get(('high'), 1),
                          'l': counts_both_strands.get(('low'), 1)}
     # print(cnts_both_strands)
@@ -83,8 +87,24 @@ def get_ratios(insertions):
               '-': log2(cnts_per_strand['-h']/cnts_per_strand['-l']),
               'both': log2(cnts_both_strands['h']/cnts_both_strands['l'])}
 
-    # print(ratios)
-    return ratios
+    rat_df = pd.DataFrame.from_dict(ratios, orient='index',
+                                    columns=['log2rat'])
+
+    tot_space = end - start
+    _, p_plus = fisher_exact([[cnts_per_strand['+h'], tot_space],
+                              [cnts_per_strand['+l'], tot_space]],
+                             alternative='two-sided')
+    _, p_minus = fisher_exact([[cnts_per_strand['-h'], tot_space],
+                               [cnts_per_strand['-l'], tot_space]],
+                              alternative='two-sided')
+    _, p_both = fisher_exact([[cnts_both_strands['h'], tot_space],
+                              [cnts_both_strands['l'], tot_space]],
+                             alternative='two-sided')
+
+    rat_df['p'] = [p_plus, p_minus, p_both]
+    rat_df['log2rat_masked'] = rat_df.log2rat.where(rat_df.p < 0.00001)
+
+    return rat_df
 
 
 def update_ratios(attr, old, new):
@@ -93,17 +113,17 @@ def update_ratios(attr, old, new):
     start_sel = int(range_tool.x_range.start)
     end_sel = int(range_tool.x_range.end)
 
-    # Filter insertions between new start and end
-    ins_sel = insertions[insertions.pos.between(start_sel, end_sel)]
+    ratios = get_ratios(insertions, start_sel, end_sel)
 
-    ratios = get_ratios(ins_sel)
+    rat_source.data['log2rat'] = ratios['log2rat']
+    rat_source.data['p'] = ratios['p']
+    rat_source.data['log2rat_masked'] = ratios['log2rat_masked']
 
-    rat_source.data['log2rat'] = [ratios['+'], ratios['-'], ratios['both']]
     rat_source.data['log2rat_str'] = list(map(lambda x: f'{x:.1f}',
                                               rat_source.data['log2rat']))
 
     ins.title.text = (f'Insertions of screen {screen_name} in '
-                        f'chr{chrom}:{start_sel:,} - {end_sel:,}')
+                      f'chr{chrom}:{start_sel:,} - {end_sel:,}')
 
     return ratios
 
@@ -113,14 +133,12 @@ ins_source = [x.data_source for x in ins.renderers
               if x.name == 'insertions'][0]
 insertions = pd.DataFrame(ins_source.data)[['chan', 'chr', 'strand', 'pos']]
 
-
 range_tool.x_range.on_change('start', update_ratios)
 range_tool.x_range.on_change('end', update_ratios)
 
-
 # Initialize ratios figure
 rat = figure(title='Log2(high/low)', plot_width=200, plot_height=500,
-             toolbar_location=None, y_range=(0, 4), x_range=(0, 10), 
+             toolbar_location=None, y_range=(0, 4), x_range=(0, 10),
              tools='')
 rat.xaxis.visible = False
 rat.yaxis.visible = False
@@ -128,18 +146,13 @@ rat.xgrid.visible = False
 rat.ygrid.visible = False
 rat.outline_line_color = None
 
-ins_sel = insertions[insertions.pos.between(ins.x_range.start,
-                                            ins.x_range.end)]
+ratios = get_ratios(insertions, ins.x_range.start, ins.x_range.end)
 
-ratios = get_ratios(ins_sel)
+ratios['log2rat_str'] = ratios.log2rat.apply(lambda x: f'{x:.1f}')
+ratios['ypos'] = [3.5, 2.5, 1.5]
+ratios['xpos'] = [4, 4, 4]
 
-rat_df = pd.DataFrame.from_dict(ratios, orient='index', columns=['log2rat'])
-rat_df['log2rat_str'] = rat_df.log2rat.apply(lambda x: f'{x:.1f}')
-rat_df['ypos'] = [3, 2, 1]
-rat_df['xpos'] = [4, 4, 4]
-rat_df['p_val'] = [0, 0, 0]
-
-rat_source = ColumnDataSource(rat_df)
+rat_source = ColumnDataSource(ratios)
 
 # Set colors
 cmap = cm.get_cmap('PiYG', 256)
@@ -147,7 +160,8 @@ PiYG256 = tuple(colors.rgb2hex(cmap(i)[:3]) for i in range(cmap.N))
 palette = PiYG256
 line_color = linear_cmap(field_name='log2rat', palette=palette,
                          low=-8, high=8)
-fill_color = 'white'
+fill_color = linear_cmap(field_name='log2rat_masked', palette=palette,
+                         low=-8, high=8, nan_color='white')
 
 # Plot
 rat.circle(x='xpos', y='ypos', size=50, line_color=line_color, line_width=10,
@@ -161,7 +175,7 @@ rat.add_glyph(rat_source, rat_text)
 
 
 # Add legend text
-leg_source = ColumnDataSource(dict(x=[5, 5, 5], y=[3.3, 2.3, 1.3],
+leg_source = ColumnDataSource(dict(x=[5, 5, 5], y=[3.8, 2.8, 1.8],
                                    text=['+ strand', '- strand',
                                          'Both strands']))
 leg_glyph = Text(x='x', y='y', text='text', text_font_size='10pt',

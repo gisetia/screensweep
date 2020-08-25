@@ -7,6 +7,7 @@ from typing import Dict, Tuple, Optional
 
 from .utils import timer
 
+pd.options.mode.chained_assignment = None
 
 @timer
 def get_sweep_data(data_dir: str, params: dict) -> pd.DataFrame:
