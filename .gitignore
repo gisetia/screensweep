@@ -1,10 +1,10 @@
-__pycache__/
 data
 analyzed-data
 sample-data
 screen-analyzer-data
-
 plots
+
+__pycache__/
 .DS_Store
 .vscode
 screen-analyzer.conf

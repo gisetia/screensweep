@@ -479,7 +479,7 @@ def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, insertions,
 
     rect_src = ColumnDataSource({'x': [0, tx_pos[1]-tx_pos[0],
                                        tx_pos[1]-tx_pos[0], 0],
-                                 'y': [0, 0, 6, 6]})
+                                 'y': [3, 3, 6, 6]})
     rect = ins.patch(x='x', y='y', fill_color='gray', source=rect_src,
                      line_color=None, alpha=0.15)
     rect.visible = False
@@ -492,7 +492,7 @@ def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, insertions,
     var e = sweep.data['end_pos'][idx]
 
     rect.data_source.data['x'] = [e, s, s, e]
-    rect.data_source.change.emit(); 
+    rect.data_source.change.emit();
 
     console.log('Tap: ' + s + ' ' + e)
     '''

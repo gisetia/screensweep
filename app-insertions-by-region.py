@@ -15,11 +15,26 @@ from tools.plotting.insertionsrange import plot_insertions, ins_select_range
 # reload(tls)
 
 data_dir = 'data/screen-analyzer-data'
-chrom = '9'
+screen_name = 'PDL1_IFNg'
+assembly = 'hg38'
+trim_length = 50
 
-# super enhancer
-start = 5495000
-end = 5505000
+filename = 'plots/test_insertions1.html'
+
+# position = 'chr9:4,984,390-5,129,948'
+
+position = 'chr6:127,027,001-127,027,500'
+
+chrom = position.split(':')[0][3:]
+start = int(position.split(':')[1].split('-')[0].replace(',',''))
+end = int(position.split(':')[1].split('-')[1].replace(',',''))
+
+
+
+# pdl1 super enhancer
+# chrom = '9'
+# start = 5495000
+# end = 5505000
 
 
 # start = 5580709
@@ -39,13 +54,6 @@ end = 5505000
 
 # start = 5492001
 # end = 5495000
-
-padd = 50
-
-screen_name = 'PDL1_IFNg'
-assembly = 'hg19'
-trim_length = 50
-
 
 ins = plot_insertions(data_dir, screen_name, assembly,
                       trim_length, chrom, start, end, 200000)
@@ -175,6 +183,6 @@ layout = row(column(ins, select), rat)
 curdoc().title = 'Insertions per region'
 curdoc().add_root(layout)
 
-output_file('plots/test_insertions.html')
+output_file(filename)
 show(layout)
 # %%

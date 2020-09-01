@@ -77,10 +77,14 @@ def read_insertions(data_dir: str, screen_name: str, assembly: str,
 
 
 @timer
-def read_refseq(assembly: str) -> pd.DataFrame:
+def read_refseq(assembly: str,
+                name_chrom: Optional[bool] = False) -> pd.DataFrame:
     '''Returns data from refseq file as dataframe. (Only protein coding and
     chromosomes without underscore).
+    If 'name_chrom' is True, adds column 'name_chr' with name2_chrom.
+    eg. C1orf141_chr1.
     '''
+
     filename = f'data/genes/ncbi-genes-{assembly}.txt'
     refseq = pd.read_csv(filename, sep='\\t', engine='python')
 
@@ -90,6 +94,10 @@ def read_refseq(assembly: str) -> pd.DataFrame:
 
     # Remove alternative chromosomes
     refseq = refseq[~refseq['chrom'].str.contains('_')]
+
+    if name_chrom:
+        refseq['name_chr'] = refseq.apply(lambda x:
+                                          f'{x.name2}_{x.chrom}', axis=1)
 
     return refseq
 
