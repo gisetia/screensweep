@@ -12,7 +12,7 @@ screen_name = 'PDL1_IFNg'
 assembly = 'hg38'
 trim_length = 50
 
-step = 500
+step = 1000
 data_dir = 'data/analyzed-data'
 
 
@@ -54,9 +54,10 @@ def drop_ins_in_genes(ins_chr, chr, coll_refseq):
 
 
 coll_refseq = refseq.groupby('name_chr').apply(collapse_gene_refseq)
-ins_out = ins.groupby('chr').apply(lambda x:
-                                   drop_ins_in_genes(x, x.name, coll_refseq))
+# ins_out = ins.groupby('chr').apply(lambda x:
+#                                    drop_ins_in_genes(x, x.name, coll_refseq))
 
+ins_out = ins
 
 # %% Get insertion counts for genome intervals
 # %%time

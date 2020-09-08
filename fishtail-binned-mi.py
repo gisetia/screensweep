@@ -1,18 +1,18 @@
 # %%
 import pandas as pd
 import numpy as np
-from bokeh.models import (BasicTickFormatter, Legend, HoverTool,
+from bokeh.models import (BasicTickFormatter, HoverTool,
                           TapTool, ColumnDataSource, Div)
 from bokeh.plotting import figure, output_file, show
 from bokeh.models.callbacks import CustomJS
-from bokeh.layouts import row, column
+from bokeh.layouts import row
 
 p_thr = 5e-2
 
 screen_name = 'PDL1_IFNg'
 assembly = 'hg38'
 trim_length = 50
-step = 500
+step = 1000
 data_dir = 'data/analyzed-data'
 
 filename = (f'data/analyzed-data/{screen_name}/{assembly}/{trim_length}'

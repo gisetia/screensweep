@@ -23,37 +23,12 @@ filename = 'plots/test_insertions1.html'
 
 # position = 'chr9:4,984,390-5,129,948'
 
-position = 'chr6:127,027,001-127,027,500'
+position = 'chr6:137,197,484-137,220,351'
 
 chrom = position.split(':')[0][3:]
-start = int(position.split(':')[1].split('-')[0].replace(',',''))
-end = int(position.split(':')[1].split('-')[1].replace(',',''))
+start = int(position.split(':')[1].split('-')[0].replace(',', ''))
+end = int(position.split(':')[1].split('-')[1].replace(',', ''))
 
-
-
-# pdl1 super enhancer
-# chrom = '9'
-# start = 5495000
-# end = 5505000
-
-
-# start = 5580709
-# end = 5591016
-
-# https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0166626
-# start = 5455433
-# end = 5455446
-
-# # # pdl1
-# start = 5450503
-# end = 5470567
-
-# jak2
-# start = 4985033
-# end = 5128183
-
-# start = 5492001
-# end = 5495000
 
 ins = plot_insertions(data_dir, screen_name, assembly,
                       trim_length, chrom, start, end, 200000)
