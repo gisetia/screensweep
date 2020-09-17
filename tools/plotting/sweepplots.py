@@ -454,7 +454,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
 
 def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, insertions,
                        refseq):
-    gene = gene.upper()
+    # gene = gene.upper()
     gene_pos = get_gene_positions(gene, refseq)
     sweep_layout, sweep_src, sweep_plt = plot_sweep(gene, params,
                                                     data_dir, grouped_sweep,

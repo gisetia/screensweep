@@ -8,7 +8,7 @@ from importlib import reload
 reload(tls)
 
 # Define parameters of screen to read
-params = {'screen_name': 'p-AKT',
+params = {'screen_name': 'Ac-gamma-Actin',
           'assembly': 'hg38',
           'trim_length': '50',
           'mode': 'collapse',
@@ -18,8 +18,9 @@ params = {'screen_name': 'p-AKT',
           'direction': 'sense',
           'step': 500}
 
-data_dir = 'data/analyzed-data'
+# data_dir = 'data/analyzed-data'
 # data_dir = 'sample-data/analyzed-data'
+data_dir = '../data/sweeps-analyzed'
 
 grouped_sweep = read_analyzed_sweep(data_dir, params)
 

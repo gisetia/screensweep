@@ -18,7 +18,7 @@ from tools.plotting.sweepplots import link_sweep_and_ins
 # reload(tls)
 
 # Define parameters of screen to read
-params = {'screen_name': 'PDL1_IFNg',
+params = {'screen_name': 'Ac-gamma-Actin',
           'assembly': 'hg38',
           'trim_length': '50',
           'mode': 'collapse',
@@ -28,16 +28,19 @@ params = {'screen_name': 'PDL1_IFNg',
           'direction': 'sense',
           'step': 500}
 
-data_dir = 'data/analyzed-data'
-ins_data_dir = 'data/screen-analyzer-data'
-ins_data_dir = data_dir
+data_dir = '../data/sweeps-analyzed'
+ins_data_dir = '../data/screen-insertions'
+
+# data_dir = 'data/analyzed-data'
+# ins_data_dir = 'data/screen-analyzer-data'
+# ins_data_dir = data_dir
 # gene = 'SOAT1'
 
 gene_opts = []
 
 # Menus
 menu_margins = (20, 50, 0, 10)
-screen_opts = ['PDL1_IFNg', 'p-AKT']
+screen_opts = ['PDL1_IFNg', 'p-AKT', 'Ac-gamma-Actin', 'IkBa']
 screen_menu = AutocompleteInput(title='Screen', value='',
                                 completions=screen_opts, width=150,
                                 min_characters=1, case_sensitive=False,
@@ -70,7 +73,10 @@ def update_screen():
 
     try:
         grouped_sweep = read_analyzed_sweep(data_dir, params)
-        insertions = read_insertions(data_dir, params['screen_name'],
+
+        # need to update reading insertions
+        if params['screen_name'] == 'PDL1_IFNg':
+            insertions = read_insertions(data_dir, params['screen_name'],
                                      params['assembly'], params['trim_length'])
         curdoc().add_next_tick_callback(update_gene_menu)
     except OSError:
@@ -85,6 +91,9 @@ def update_gene_menu():
 
 def load_assembly(attr, old, new):
     txt_out.text = 'Loading assembly...'
+    assembly = assembly_menu.value
+    global refseq
+    refseq = read_refseq('../data/refseq', assembly)
     curdoc().add_next_tick_callback(update_screen)
 
 
@@ -107,7 +116,7 @@ assembly_menu.on_change('value', load_assembly)
 gene_menu.on_change('value', load_gene)
 
 # Load hg38 refseq by default
-refseq = read_refseq('hg38')
+refseq = read_refseq('../data/refseq', 'hg38')
 
 # Initialize empty figures
 sweep = figure(plot_width=600, plot_height=600, toolbar_location=None)

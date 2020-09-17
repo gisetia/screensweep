@@ -231,7 +231,7 @@ def get_gene_info(gene: str,
     '''Given a grouped_sweep created by 'read_analyzed_sweep', returns
     unstacked dataframe containing all sweep data for a given gene.
     '''
-    gene = gene.upper()
+    # gene = gene.upper()
     gene_info = grouped_sweep.get_group(gene)
 
     return gene_info.unstack()
