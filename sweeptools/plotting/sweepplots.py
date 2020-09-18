@@ -56,11 +56,11 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
                        f'Screen: {params["screen_name"]}',
                  x_axis_label='Position (bp)',
                  plot_width=1000,
-                 plot_height=400,
+                 plot_height=300,
                  x_range=(xlim[0]-padd*0.1, xlim[1] + padd*0.1),
                  y_range=ylim,
                  toolbar_location=None,
-                 margin=(40, 0, 0, 0)
+                 margin=(0, 0, 0, 0)
                  )
 
     plt.ygrid.grid_line_color = None
@@ -176,7 +176,7 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
 
     # Plot insertions
     plt.dash(x='xpos', y='ypos', color='color', source=source,
-             angle=pi/2, line_width=1, size=12,)
+             angle=pi/2, line_width=1, size=10,)
 
     # endregion
 
@@ -238,7 +238,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     palette = PiYG256
 
     # palette = PiYG8[::-1]
-    plot_width = 600
+    plot_width = 500
 
     # Arrange data to plot ----------------------------------------------------
     # region ------------------------------------------------------------------
@@ -246,7 +246,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     src = gene_info.stack().reset_index()
 
     # Get p values under given threshold
-    p_thr = 0.00001
+    p_thr = 0.05
     src['log2_mi_masked'] = src.log2_mi.where(src.p_fdr < p_thr)
 
     # Rescale log2 MI to get nice sizes in plot
@@ -317,7 +317,8 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
         slope_thr = 2
         # p_ratio_thr = 6
         # p_thr = 0.00001
-        flags = get_flags_for_gene(gene, grouped_sweep, slope_thr=slope_thr)
+        flags = get_flags_for_gene(gene, grouped_sweep, slope_thr=slope_thr,
+                                   p_thr=1e-10)
 
         f_col = ['#4B98E5']
 
@@ -362,7 +363,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     # Color legend
     col_leg = figure(title='Log2 (MI)',
                      x_range=(0, 10), y_range=(0, 100),
-                     plot_width=200, plot_height=250,
+                     plot_width=200, plot_height=220,
                      toolbar_location=None)
     remove_grid_and_ticks(col_leg)
 
@@ -504,4 +505,3 @@ def link_sweep_and_ins(gene, grouped_sweep, params, data_dir, insertions,
                                                   code=code)
 
     return sweep_layout, ins
-

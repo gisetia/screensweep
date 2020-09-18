@@ -89,7 +89,11 @@ def read_refseq(data_dir: str, assembly: str,
     refseq = pd.read_csv(filename, sep='\\t', engine='python')
 
     # Get only known coding entries (starting with NM) and complete status
-    refseq = refseq.query('name.str.startswith("NM") & cdsStartStat == "cmpl"'
+    # refseq = refseq.query('name.str.startswith("NM") & cdsStartStat == "cmpl"'
+    #                       '& cdsEndStat == "cmpl"')
+
+    # Query consistent with screen-analyzer from July 2020:
+    refseq = refseq.query('cdsStartStat == "cmpl"'
                           '& cdsEndStat == "cmpl"')
 
     # Remove alternative chromosomes

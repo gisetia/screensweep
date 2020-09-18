@@ -3,10 +3,10 @@ from bokeh.plotting import output_file, show
 from bokeh.layouts import row, column
 from bokeh.models import AutocompleteInput, Div
 
-from tools.analyzesweep import read_analyzed_sweep
-from tools.analyzeinsertions import read_insertions, read_refseq
+from sweeptools.analyzesweep import read_analyzed_sweep
+from sweeptools.analyzeinsertions import read_insertions, read_refseq
 
-from tools.plotting.sweepplots import link_sweep_and_ins
+from sweeptools.plotting.sweepplots import link_sweep_and_ins
 
 filename = 'plots/PDL1-sweep.html'
 

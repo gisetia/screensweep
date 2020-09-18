@@ -1,19 +1,19 @@
 # %%
-
+import os
 from bokeh.plotting import figure, output_file, show, curdoc
 from bokeh.layouts import row, column
 from bokeh.models import AutocompleteInput, Div
 
-# import tools as tls
+# import sweeptools as tls
 
-from tools.analyzesweep import read_analyzed_sweep
-from tools.analyzeinsertions import read_insertions, read_refseq
-# from tools.plots import link_sweep_and_ins
+from sweeptools.analyzesweep import read_analyzed_sweep
+from sweeptools.analyzeinsertions import read_insertions, read_refseq
+# from sweeptools.plots import link_sweep_and_ins
 
-from tools.plotting.sweepplots import link_sweep_and_ins
+from sweeptools.plotting.sweepplots import link_sweep_and_ins
 
 
-# from tools.utils import timer
+# from sweeptools.utils import timer
 # from importlib import reload
 # reload(tls)
 
@@ -34,24 +34,26 @@ ins_data_dir = '../data/screen-insertions'
 # data_dir = 'data/analyzed-data'
 # ins_data_dir = 'data/screen-analyzer-data'
 # ins_data_dir = data_dir
-# gene = 'SOAT1'
+# gene = 'CD274'
 
 gene_opts = []
 
 # Menus
 menu_margins = (20, 50, 0, 10)
-screen_opts = ['PDL1_IFNg', 'p-AKT', 'Ac-gamma-Actin', 'IkBa']
+# screen_opts = ['PDL1_IFNg', 'Ac-beta-actin_WT',
+#                'Ac-gamma-Actin', 'THAP12KO_6-4PP_UV']
+screen_opts = os.listdir(data_dir)
 screen_menu = AutocompleteInput(title='Screen', value='',
-                                completions=screen_opts, width=150,
+                                completions=screen_opts, width=200,
                                 min_characters=1, case_sensitive=False,
                                 margin=menu_margins)
 assembly_opts = ['hg38', 'hg19']
 assembly_menu = AutocompleteInput(title='Assembly', value='hg38',
-                                  completions=assembly_opts, width=150,
+                                  completions=assembly_opts, width=200,
                                   min_characters=1, case_sensitive=False,
                                   margin=menu_margins)
 gene_menu = AutocompleteInput(title='Gene', value='',
-                              completions=gene_opts, width=150,
+                              completions=gene_opts, width=200,
                               min_characters=1, case_sensitive=False,
                               margin=menu_margins)
 
@@ -73,12 +75,12 @@ def update_screen():
 
     try:
         grouped_sweep = read_analyzed_sweep(data_dir, params)
-
-        # need to update reading insertions
-        if params['screen_name'] == 'PDL1_IFNg':
-            insertions = read_insertions(data_dir, params['screen_name'],
-                                     params['assembly'], params['trim_length'])
+        insertions = read_insertions(ins_data_dir, params['screen_name'],
+                                     params['assembly'],
+                                     params['trim_length'])
         curdoc().add_next_tick_callback(update_gene_menu)
+        curdoc().add_next_tick_callback(load_plots)
+
     except OSError:
         txt_out.text = 'No data found for these parameters.'
 
@@ -104,11 +106,25 @@ def load_gene(attr, old, new):
 
 def update_gene():
     txt_out.text = 'Finished loading gene.'
+    global gene
     gene = gene_menu.value
-    sweep, ins = link_sweep_and_ins(gene, grouped_sweep, params,
-                                    data_dir, insertions, refseq)
-    layout.children[0].children[1] = sweep
-    layout.children[1] = ins
+    curdoc().add_next_tick_callback(load_plots)
+
+
+def load_plots():
+    txt_out.text = 'Loading plots...'
+    curdoc().add_next_tick_callback(update_plots)
+
+
+def update_plots():
+    txt_out.text = 'Finished loading plots.'
+    try:
+        sweep, ins = link_sweep_and_ins(gene, grouped_sweep, params,
+                                        data_dir, insertions, refseq)
+        layout.children[0].children[1] = sweep
+        layout.children[1] = ins
+    except NameError:
+        print('Omitting plot since gene is not defined yet.')
 
 
 screen_menu.on_change('value', load_screen)
@@ -129,6 +145,7 @@ txt_out = Div(text='', margin=menu_margins, width=150)
 menus = column(screen_menu, assembly_menu, gene_menu, txt_out)
 layout = column(row(menus, sweep), ins)
 
+curdoc().title = 'Sweep browser'
 curdoc().add_root(layout)
 output_file('plots/test_plot.html')
 show(layout)

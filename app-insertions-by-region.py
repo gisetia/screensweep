@@ -8,9 +8,9 @@ from matplotlib import cm, colors
 from math import log2
 from scipy.stats import fisher_exact
 
-from tools.plotting.insertionsrange import plot_insertions, ins_select_range
+from sweeptools.plotting.insertionsrange import plot_insertions, ins_select_range
 
-# import tools as tls
+# import sweeptools as tls
 # from importlib import reload
 # reload(tls)
 

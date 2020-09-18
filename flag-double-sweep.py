@@ -1,14 +1,14 @@
 # %%
 
-from tools.analyzesweep import (read_analyzed_sweep, get_flagged_genes,
-                                get_flags_for_gene)
+from sweeptools.analyzesweep import (read_analyzed_sweep, get_flagged_genes,
+                                     get_flags_for_gene)
 
-import tools as tls
+import sweeptools as tls
 from importlib import reload
 reload(tls)
 
 # Define parameters of screen to read
-params = {'screen_name': 'Ac-gamma-Actin',
+params = {'screen_name': 'LDLR-LSM-ctrl',
           'assembly': 'hg38',
           'trim_length': '50',
           'mode': 'collapse',
@@ -24,13 +24,15 @@ data_dir = '../data/sweeps-analyzed'
 
 grouped_sweep = read_analyzed_sweep(data_dir, params)
 
-# %% get all gene flags
+# % get all gene flags
 
 reload(tls)
 
 slope_thr = 2
 p_ratio_thr = 10
-p_thr = 1e-5
+p_thr = 1e-15
+print(f'Finding flagged genes for screen {params["screen_name"]} - '
+      f'{params["assembly"]} - p_thr {p_thr}')
 flagged_genes = tls.analyzesweep.get_flagged_genes(grouped_sweep, p_thr,
                                                    slope_thr, p_ratio_thr)
 
