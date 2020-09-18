@@ -29,12 +29,16 @@ grouped_sweep = read_analyzed_sweep(data_dir, params)
 reload(tls)
 
 slope_thr = 2
-p_ratio_thr = 10
+mi_thr = 3
 p_thr = 1e-15
 print(f'Finding flagged genes for screen {params["screen_name"]} - '
-      f'{params["assembly"]} - p_thr {p_thr}')
+      f'{params["assembly"]} - p_thr:{p_thr}')
 flagged_genes = tls.analyzesweep.get_flagged_genes(grouped_sweep, p_thr,
-                                                   slope_thr, p_ratio_thr)
+                                                   slope_thr, mi_thr)
+
+set((*flagged_genes[0].keys(), *flagged_genes[1].keys()))
+
+
 
 # %% get flags for single gene
 

@@ -122,8 +122,12 @@ def plot_transcripts(gene, params, insertions, gene_pos=None):
                              line_color='#5f5f61', line_width=2,
                              x_start=x_srt, y_start=ypos,
                              x_end=x_end, y_end=ypos))
+
+        tx_line_color = '#BCBCBF' if tx.known else '#B2D1F0'
         plt.line(x=(tx['txStart']-zero, tx['txEnd']-zero), y=(ypos, ypos),
-                 color='#5f5f61', line_width=2)
+                 color=tx_line_color, line_width=2)
+        # plt.line(x=(tx['txStart']-zero, tx['txEnd']-zero), y=(ypos, ypos),
+        #          color='#5f5f61', line_width=2)
 
     # Plot exons
     # Transform datasource for exons

@@ -96,6 +96,11 @@ def read_refseq(data_dir: str, assembly: str,
     refseq = refseq.query('cdsStartStat == "cmpl"'
                           '& cdsEndStat == "cmpl"')
 
+    # Add info on whether transcripts are coding or non-coding and whether
+    # they are known or predicted
+    refseq['coding'] = refseq.name.str.contains('^[NX]M_*')
+    refseq['known'] = refseq.name.str.contains('^[N][MR]_*')
+
     # Remove alternative chromosomes
     refseq = refseq[~refseq['chrom'].str.contains('_')]
 

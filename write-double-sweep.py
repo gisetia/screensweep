@@ -4,7 +4,7 @@ import sweeptools
 from sweeptools.analyzesweep import get_sweep_data, write_sweep_data
 
 # Define parameters of screen to read
-params = {'screen_name': 'H3K27-but',
+params = {'screen_name': 'CPD',
           'assembly': 'hg38',
           'trim_length': '50',
           'mode': 'collapse',

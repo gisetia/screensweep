@@ -243,9 +243,13 @@ def get_gene_info(gene: str,
 def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
                       p_thr: float,
                       slope_thr: float,
-                      p_ratio_thr: float) -> Tuple[Dict[str, pd.DataFrame],
-                                                   Dict[str, pd.DataFrame]]:
-    '''Given a grouped_sweep created by 'read_analyzed_sweep', finds genes
+                      mi_thr: float,
+                      #   p_ratio_thr: float
+                      ) -> Tuple[Dict[str, pd.DataFrame],
+                                 Dict[str, pd.DataFrame],
+                                 list]:
+    ''' need to update
+    Given a grouped_sweep created by 'read_analyzed_sweep', finds genes
     that have a higher slope and p ratio than the thresholds given by
     'slope_thr' and 'p_thr'.
     Slope refers to the change in the log2 mutation index per 1,000 bp.
@@ -256,16 +260,19 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
 
     flagged_sdir = dict()
     flagged_edir = dict()
+    already = []
     ct = 0
 
     for name, group in grouped_sweep:
 
         try:
-            # if p_fdr at tx start and end is already lower than set
-            # threshold, gene was likely already identified as regulator,
+            # if p_fdr and log2_mi at tx start and end already exceed set
+            # thresholds, gene was likely already identified as regulator,
             # so move on to next gene in loop
-            if group.loc[0, 0].p_fdr < p_thr:
-                print(f'Likely alredy flagged: {name}')
+            if (group.loc[0, 0].p_fdr < p_thr
+                    or abs(group.loc[0, 0].log2_mi) > mi_thr):
+                # print(f'Likely alredy flagged: {name}')
+                already.append(name)
                 continue
         # If no p_fdr was found with this parameters, continue with analysis
         except KeyError:
@@ -294,7 +301,9 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
     print(f'\n# flagged genes: {ct} -- # start flags: {len(flagged_sdir)} -- '
           f'# end flags: {len(flagged_edir)}')
 
-    return (flagged_sdir, flagged_edir)
+    print(f'\nLikely already flagged: {already}')
+
+    return (flagged_sdir, flagged_edir, already)
 
 
 def get_flags_for_gene(gene: str,
