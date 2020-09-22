@@ -93,7 +93,8 @@ def read_refseq(data_dir: str, assembly: str,
     #                       '& cdsEndStat == "cmpl"')
 
     # Query consistent with screen-analyzer from July 2020:
-    refseq = refseq.query('cdsStartStat == "cmpl"'
+    refseq = refseq.query('name.str.startswith("N") '
+                          '& cdsStartStat == "cmpl"'
                           '& cdsEndStat == "cmpl"')
 
     # Add info on whether transcripts are coding or non-coding and whether

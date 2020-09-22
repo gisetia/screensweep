@@ -4,9 +4,11 @@ sample-data
 screen-analyzer-data
 plots
 logs
+flags
 
 __pycache__/
 .DS_Store
 .vscode
 screen-analyzer.conf
 stuff.txt
+tmp.py

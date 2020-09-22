@@ -1,3 +1,4 @@
+from os import replace
 import re
 import os
 import pandas as pd
@@ -44,9 +45,13 @@ def get_sweep_data(data_dir: str, params: dict) -> pd.DataFrame:
 
     files = os.listdir(data_path)
     df_list = []  # Initialize list to append data
-    for filename in files:
+    repeated_genes = set()
+    for idx, filename in enumerate(files):
 
         if filename.startswith('out'):
+
+            # print(f'Reading file: {idx + 1} of {len(files)}')
+
             # Get param values from filename
             match = re.search(r'_start=(.*?)_', filename)
             start = match.group(1)
@@ -58,14 +63,36 @@ def get_sweep_data(data_dir: str, params: dict) -> pd.DataFrame:
                              index_col=None, header=None)
             df[6] = start
             df[7] = end
+
+            # Remove header line if included
+            if df.iloc[0][0] == 'gene':
+                df = df.drop([0])
+
+            df = df.rename(columns={0: 'gene_name', 1: 'low_counts',
+                                    2: 'high_counts', 3: 'p',
+                                    4: 'p_fdr', 5: 'log2_mi',
+                                    6: 'start', 7: 'end'})
+
+            repeated = df.groupby('gene_name').apply(lambda x: len(x))
+            repeated_genes.update(repeated[repeated > 1].index)
+
+            df = df.groupby('gene_name').first()
+            df = df.reset_index()
+
             df_list.append(df)
+
+    if repeated_genes:
+        print('-- Warning! The following genes were repeated, so only first '
+              'instance was considered:')
+        print('\n'.join(repeated_genes))
 
     # Create single dataframe from list
     sweep_data = pd.concat(df_list, axis=0, ignore_index=True)
-    sweep_data = sweep_data.rename(columns={0: 'gene_name', 1: 'low_counts',
-                                            2: 'high_counts', 3: 'p',
-                                            4: 'p_fdr', 5: 'log2_mi',
-                                            6: 'start', 7: 'end'})
+
+    # sweep_data = sweep_data.rename(columns={0: 'gene_name', 1: 'low_counts',
+    #                                         2: 'high_counts', 3: 'p',
+    #                                         4: 'p_fdr', 5: 'log2_mi',
+    #                                         6: 'start', 7: 'end'})
 
     # Trandform parameter into numbers, eg. 'tx-100' is changed to column
     # 'offset' with value -100:int
@@ -124,10 +151,21 @@ def write_sweep_data(data_dir: str, sweep_data: pd.DataFrame,
 
         print(name)
 
+        # try:
+
         gene_data = group.pivot(index='srt_off', columns='end_off',
                                 values=['gene_name', 'low_counts',
                                         'high_counts', 'p', 'p_fdr',
                                         'log2_mi'])
+        # except ValueError:
+        #     print(f'-- Warning: repeated parameters for gene {name}, '
+        #           'taking average values.')
+        #     gene_data = group.pivot_table(index='srt_off', columns='end_off',
+        #                                   values=['gene_name', 'low_counts',
+        #                                           'high_counts', 'p', 'p_fdr',
+        #                                           'log2_mi'])
+        #     print(gene_data.columns)
+        #     warning_genes.append(name)
 
         # Get slopes of log2 MI when changing parameters in both directions
         # (delta log2 MI per 1,000 bp)
@@ -188,6 +226,9 @@ def write_sweep_data(data_dir: str, sweep_data: pd.DataFrame,
     all_info.to_parquet(f'{data_path}all_gene_info.parquet.snappy',
                         engine='pyarrow', compression='snappy')
 
+    # print(f'-- Warning: repeated parameters for genes {warning_genes}, '
+    #       ' average values were used.')
+
     return all_info
 
 
@@ -239,15 +280,15 @@ def get_gene_info(gene: str,
     return gene_info.unstack()
 
 
-@ timer
-def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
-                      p_thr: float,
-                      slope_thr: float,
-                      mi_thr: float,
-                      #   p_ratio_thr: float
-                      ) -> Tuple[Dict[str, pd.DataFrame],
-                                 Dict[str, pd.DataFrame],
-                                 list]:
+# @ timer
+def flag_by_slope(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
+                  p_thr: float,
+                  slope_thr: float,
+                  mi_thr: float,
+                  #   p_ratio_thr: float
+                  ) -> Tuple[Dict[str, pd.DataFrame],
+                             Dict[str, pd.DataFrame],
+                             list]:
     ''' need to update
     Given a grouped_sweep created by 'read_analyzed_sweep', finds genes
     that have a higher slope and p ratio than the thresholds given by
@@ -301,7 +342,8 @@ def get_flagged_genes(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
     print(f'\n# flagged genes: {ct} -- # start flags: {len(flagged_sdir)} -- '
           f'# end flags: {len(flagged_edir)}')
 
-    print(f'\nLikely already flagged: {already}')
+    print('\nLikely already flagged:')
+    print("\n".join(already))
 
     return (flagged_sdir, flagged_edir, already)
 
@@ -313,7 +355,7 @@ def get_flags_for_gene(gene: str,
                        p_ratio_thr: Optional[float] = None) -> Tuple[
         pd.DataFrame, pd.DataFrame]:
 
-    p_thr = p_thr or 0.00001
+    p_thr = p_thr or 0.001
     slope_thr = slope_thr or 2
     p_ratio_thr = p_ratio_thr or 20
 

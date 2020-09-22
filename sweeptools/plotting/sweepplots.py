@@ -320,9 +320,9 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
 
         slope_thr = 2
         # p_ratio_thr = 6
-        # p_thr = 0.00001
+        p_thr_flag = 0.00001
         flags = get_flags_for_gene(gene, grouped_sweep, slope_thr=slope_thr,
-                                   p_thr=1e-10)
+                                   p_thr=p_thr_flag)
 
         f_col = ['#4B98E5']
 
@@ -431,16 +431,19 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
         x = [1]
         y = [70]
         size = [20]
-        txt = [f'\u0394 log2MI > {slope_thr} per 1kbp']
 
-        f_leg_source = ColumnDataSource(dict(x=x, y=y, text=txt,
+        f_leg_source = ColumnDataSource(dict(x=x, y=y,
                                              size=size, fill=f_col))
 
         flag_leg.square(x='x', y='y', size='size', source=f_leg_source,
                         fill_color='fill', line_color='fill', alpha=0.8)
+
+        txt = [f'\u0394 log2MI > {slope_thr} per 1kbp', f'p < {p_thr_flag}']
+        f_leg_txt_source = ColumnDataSource(dict(x=[1, 1], y=[80, 55],
+                                                 text=txt))
         glyph = Text(x='x', y='y', text='text', text_font_size='10pt',
                      x_offset=15, y_offset=7)
-        flag_leg.add_glyph(f_leg_source, glyph)
+        flag_leg.add_glyph(f_leg_txt_source, glyph)
 
     # endregion
 

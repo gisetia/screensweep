@@ -1,10 +1,11 @@
 # %%
+from sweeptools.analyzesweep import get_sweep_data, write_sweep_data
 from importlib import reload
 import sweeptools
-from sweeptools.analyzesweep import get_sweep_data, write_sweep_data
+reload(sweeptools)
 
 # Define parameters of screen to read
-params = {'screen_name': 'CPD',
+params = {'screen_name': 'LAD5-GFP_1',
           'assembly': 'hg38',
           'trim_length': '50',
           'mode': 'collapse',
@@ -14,14 +15,19 @@ params = {'screen_name': 'CPD',
           'direction': 'sense',
           'step': 500}
 
-indata_dir = '../data/sweeps-screen-analyzer'
+indata_dir = '../data/sweeps-screen-analyzer_2020-09-21'
+# indata_dir = '../data/sweeps-screen-analyzer_2020-06-25'
 
-sweep = get_sweep_data(indata_dir, params)
+print(f'Reading sweep for screen {params["screen_name"]}')
+sweep = sweeptools.analyzesweep.get_sweep_data(indata_dir, params)
+
 
 # %%
+reload(sweeptools)
 
-outdata_dir = '../data/sweeps-analyzed'
-gene_info = write_sweep_data(outdata_dir, sweep, params)
+outdata_dir = '../data/sweeps-analyzed_2020-09-21'
+gene_info = sweeptools.analyzesweep.write_sweep_data(outdata_dir, sweep,
+                                                     params)
 
 # %%
 # from importlib import reload

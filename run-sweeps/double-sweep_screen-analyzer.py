@@ -1,11 +1,12 @@
 # %%
+from itertools import product
 import os
 # import time
 import subprocess
 from configparser import ConfigParser
 
 # Define parameters for config file and analyze command
-screen_name = 'PDL1_IFNg'
+screen_name = 'Ac-beta-actin_WT'
 assembly = 'hg38'
 trim_length = '50'
 mode = 'collapse'
@@ -13,7 +14,7 @@ overlap = 'both'
 direction = 'sense'
 
 # Define sweep settings
-step = 1000
+step = 500
 limit_into_gene = 10000
 limit_out_gene = 2000
 
@@ -23,8 +24,8 @@ sweep_range_start = range(-limit_out_gene, limit_into_gene + 1, step)
 sweep_range_end = range(limit_out_gene, -limit_into_gene - 1, -step)
 
 # Output directory
-out_path = (f'analyzed/{screen_name}/{assembly}/{trim_length}/mode={mode}_'
-            f'direction={direction}_overlap={overlap}/double-sweep'
+out_path = (f'analyzed-double-sweep/{screen_name}/{assembly}/{trim_length}/'
+            f'mode={mode}_direction={direction}_overlap={overlap}/double-sweep'
             f'_step={step}/')
 
 if not os.path.exists(out_path):
@@ -65,7 +66,6 @@ write_config_file(config_data, 'screen-analyzer.conf')
 
 # %% run screen-analyzer
 
-from itertools import product
 
 for idx, (s, e) in enumerate(product(sweep_range_start, sweep_range_end)):
 
@@ -74,25 +74,41 @@ for idx, (s, e) in enumerate(product(sweep_range_start, sweep_range_end)):
     end = f'tx{e:+}'
 
     print(f'Running analysis {idx + 1} of '
-        f'{len(sweep_range_start) * len(sweep_range_end)}')
+          f'{len(sweep_range_start) * len(sweep_range_end)}')
     print(f'start tx{s:+} - end tx{e:+}')
 
     out_file = (f'start={start}_end={end}_')
 
     # write_config_file(config_data, f'{out_path}conf_{out_file}.conf')
 
-    cmd = (f'./screen-analyzer analyze {screen_name} {assembly} '
-        f'--output {out_path}out_{out_file}.txt '
-        f'--mode {mode} '
-        f'--start {start} '
-        f'--end {end} '
-        f'--overlap {overlap} '
-        f'--direction {direction} '
-        f'2> {out_path}counts_{out_file}.txt ')
+    # Command for earlier version
+    # cmd = (f'./screen-analyzer_2020-06-25/screen-analyzer analyze '
+    #        f'{screen_name} {assembly} '
+    #        f'--output {out_path}out_{out_file}.txt '
+    #        f'--mode {mode} '
+    #        f'--start {start} '
+    #        f'--end {end} '
+    #        f'--overlap {overlap} '
+    #        f'--direction {direction} '
+    #        f'2> {out_path}counts_{out_file}.txt '
+    #        )
+
+    cmd = (f'./screen-analyzer_2020-09-21/screen-analyzer analyze '
+           f'{screen_name} --assembly {assembly} '
+           f'--output {out_path}out_{out_file}.txt '
+           f'--mode {mode} '
+           f'--start {start} '
+           f'--end {end} '
+           f'--overlap {overlap} '
+           f'--direction {direction} '
+           f'2> {out_path}counts_{out_file}.txt '
+           )
 
     # start_time = time.time()
 
     subprocess.call([cmd], shell=True)
 
-    # print('--- %s seconds ---\n' % (time.time() - start_time))
+# print(f'Completed sweep for screen {screen_name}')
+
+# print('--- %s seconds ---\n' % (time.time() - start_time))
 # %%
