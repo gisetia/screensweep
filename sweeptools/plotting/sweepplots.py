@@ -250,6 +250,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     src = gene_info.stack().reset_index()
 
     # Get p values under given threshold
+    # p_thr = 1e-5
     p_thr = 0.05
     src['log2_mi_masked'] = src.log2_mi.where(src.p_fdr < p_thr)
 
@@ -304,7 +305,8 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
                                       ('End offset', '@end_off'),
                                       ('High counts', '@high_counts'),
                                       ('Low counts', '@low_counts'),
-                                      ('P-value', '@p_fdr'),
+                                      ('p-value', '@p'),
+                                      ('fdr p', '@p_fdr'),
                                       # ('\u0394 log2MI srt', '@sl_sdir'),
                                       # ('\u0394 log2MI end', '@sl_edir'),
                                       # ('min p srt', '@p_min_sdir'),
@@ -318,7 +320,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
 
     if plot_flags:
 
-        slope_thr = 2
+        slope_thr = 1
         # p_ratio_thr = 6
         p_thr_flag = 0.00001
         flags = get_flags_for_gene(gene, grouped_sweep, slope_thr=slope_thr,
@@ -331,7 +333,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
             flg_s_src['srt_off'] = flg_s_src['srt_off'] - params['step']/2
             flg_s_source = ColumnDataSource(flg_s_src)
             plt.rect(x='end_off', y='srt_off', source=flg_s_source,
-                     height=480, width=150,
+                     height=400, width=150,
                      line_color=None, fill_color=f_col[0], line_width=2,
                      alpha=.7)
 
@@ -340,7 +342,7 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
             flg_e_src['end_off'] = flg_e_src['end_off'] - params['step']/2
             flg_e_source = ColumnDataSource(flg_e_src)
             plt.rect(x='end_off', y='srt_off', source=flg_e_source,
-                     height=150, width=480,
+                     height=150, width=400,
                      line_color=None, fill_color=f_col[0], line_width=2,
                      alpha=.7)
 
@@ -350,7 +352,9 @@ def plot_sweep(gene, params, data_dir, grouped_sweep=None,
     # region ------------------------------------------------------------------
 
     plt.circle(x='end_off', y='srt_off', source=source,
-               size='log2_mi_rescaled', line_width=3,
+               #    size='log2_mi_rescaled',
+               size=10,
+               line_width=3,
                line_color=line_color, color=fill_color,
                name='datapoints', nonselection_fill_color=fill_color,
                nonselection_fill_alpha=1, nonselection_line_alpha=1)

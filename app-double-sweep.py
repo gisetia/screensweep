@@ -28,7 +28,7 @@ params = {'screen_name': 'Ac-gamma-Actin',
           'direction': 'sense',
           'step': 500}
 
-data_dir = '../data/sweeps-analyzed_2020-09-21'
+data_dir = '../data/sweeps/sweeps-analyzed_2020-09-21'
 ins_data_dir = '../data/screen-insertions'
 
 # data_dir = 'data/analyzed-data'

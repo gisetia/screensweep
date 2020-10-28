@@ -1,4 +1,5 @@
 # %%
+from bokeh.io import export_svgs
 from bokeh.plotting import output_file, show
 from bokeh.layouts import row, column
 from bokeh.models import AutocompleteInput, Div
@@ -8,10 +9,10 @@ from sweeptools.analyzeinsertions import read_insertions, read_refseq
 
 from sweeptools.plotting.sweepplots import link_sweep_and_ins
 
-filename = 'plots/PDL1-sweep.html'
+filename = 'plots/sweep.html'
 
 # Define parameters of screen to read
-params = {'screen_name': 'PDL1_IFNg',
+params = {'screen_name': 'Ac-beta-actin_WT',
           'assembly': 'hg38',
           'trim_length': '50',
           'mode': 'collapse',
@@ -21,10 +22,9 @@ params = {'screen_name': 'PDL1_IFNg',
           'direction': 'sense',
           'step': 500}
 
-data_dir = 'data/analyzed-data'
-ins_data_dir = 'data/screen-analyzer-data'
-ins_data_dir = data_dir
-gene = 'CD274'
+data_dir = '../data/sweeps/sweeps-analyzed_2020-09-21'
+ins_data_dir = '../data/screen-insertions'
+gene = 'COG8'
 
 # Menus
 menu_margins = (20, 50, 0, 10)
@@ -46,10 +46,10 @@ gene_menu = AutocompleteInput(title='Gene', value=gene,
 
 txt_out = Div(text='', margin=menu_margins, width=150)
 
-refseq = read_refseq('hg38')
+refseq = read_refseq('../data/refseq', 'hg38')
 
 grouped_sweep = read_analyzed_sweep(data_dir, params)
-insertions = read_insertions(data_dir, params['screen_name'],
+insertions = read_insertions(ins_data_dir, params['screen_name'],
                              params['assembly'], params['trim_length'])
 
 sweep, ins = link_sweep_and_ins(gene, grouped_sweep, params,
@@ -62,4 +62,11 @@ layout = column(row(menus, sweep), ins)
 output_file(filename)
 show(layout)
 
+ins.output_backend = 'svg'
+export_svgs(ins, filename='plots/ins.svg')
+sweep.children[0].output_backend = 'svg'
+export_svgs(sweep.children[0], filename='plots/double-sweep.svg')
+sweep.children[1].children[0].output_backend = 'svg'
+export_svgs(sweep.children[1].children[0],
+            filename='plots/legend-double-sweep.svg')
 # %%

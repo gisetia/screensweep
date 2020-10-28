@@ -1,9 +1,9 @@
-from os import replace
 import re
 import os
 import pandas as pd
 import numpy as np
-from typing import Dict, Tuple, Optional
+from math import log10
+from typing import Tuple, Optional
 
 from .utils import timer
 
@@ -135,37 +135,16 @@ def write_sweep_data(data_dir: str, sweep_data: pd.DataFrame,
     consecutive parameters in both start and end directions.
     '''
 
-    data_path = (f'''{data_dir}/{params['screen_name']}/'''
-                 f'''{params['assembly']}/{params['trim_length']}/'''
-                 f'''mode={params['mode']}_direction={params['direction']}'''
-                 f'''_overlap={params['overlap']}/double-sweep'''
-                 f'''_step={params['step']}/''')
-
-    if not os.path.exists(data_path):
-        os.makedirs(data_path)
-        print('Creating analyzed directory.')
-
     gene_info = dict()
     grouped = sweep_data.groupby('gene_name')
     for name, group in grouped:
 
         print(name)
 
-        # try:
-
         gene_data = group.pivot(index='srt_off', columns='end_off',
                                 values=['gene_name', 'low_counts',
                                         'high_counts', 'p', 'p_fdr',
                                         'log2_mi'])
-        # except ValueError:
-        #     print(f'-- Warning: repeated parameters for gene {name}, '
-        #           'taking average values.')
-        #     gene_data = group.pivot_table(index='srt_off', columns='end_off',
-        #                                   values=['gene_name', 'low_counts',
-        #                                           'high_counts', 'p', 'p_fdr',
-        #                                           'log2_mi'])
-        #     print(gene_data.columns)
-        #     warning_genes.append(name)
 
         # Get slopes of log2 MI when changing parameters in both directions
         # (delta log2 MI per 1,000 bp)
@@ -221,13 +200,19 @@ def write_sweep_data(data_dir: str, sweep_data: pd.DataFrame,
 
     # all_info.to_csv(f'{data_path}all_gene_info_csv.gz',
     #                 compression='gzip')
+    data_path = (f'''{data_dir}/{params['screen_name']}/'''
+                 f'''{params['assembly']}/{params['trim_length']}/'''
+                 f'''mode={params['mode']}_direction={params['direction']}'''
+                 f'''_overlap={params['overlap']}/double-sweep'''
+                 f'''_step={params['step']}/''')
+
+    if not os.path.exists(data_path):
+        os.makedirs(data_path)
+        print('Creating analyzed directory.')
 
     print(f'Writing sweep data for screen {params["screen_name"]}')
     all_info.to_parquet(f'{data_path}all_gene_info.parquet.snappy',
                         engine='pyarrow', compression='snappy')
-
-    # print(f'-- Warning: repeated parameters for genes {warning_genes}, '
-    #       ' average values were used.')
 
     return all_info
 
@@ -284,11 +269,7 @@ def get_gene_info(gene: str,
 def flag_by_slope(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
                   p_thr: float,
                   slope_thr: float,
-                  mi_thr: float,
-                  #   p_ratio_thr: float
-                  ) -> Tuple[Dict[str, pd.DataFrame],
-                             Dict[str, pd.DataFrame],
-                             list]:
+                  ) -> pd.DataFrame:
     ''' need to update
     Given a grouped_sweep created by 'read_analyzed_sweep', finds genes
     that have a higher slope and p ratio than the thresholds given by
@@ -299,53 +280,72 @@ def flag_by_slope(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
     either the start or the end parameter, respectively.
     '''
 
-    flagged_sdir = dict()
-    flagged_edir = dict()
-    already = []
+    flagged_df_list = []
     ct = 0
 
     for name, group in grouped_sweep:
 
-        try:
-            # if p_fdr and log2_mi at tx start and end already exceed set
-            # thresholds, gene was likely already identified as regulator,
-            # so move on to next gene in loop
-            if (group.loc[0, 0].p_fdr < p_thr
-                    or abs(group.loc[0, 0].log2_mi) > mi_thr):
-                # print(f'Likely alredy flagged: {name}')
-                already.append(name)
-                continue
-        # If no p_fdr was found with this parameters, continue with analysis
-        except KeyError:
-            pass
-        except TypeError:
-            pass
-
         # Continue if at least one point in sweep is highly significant
-        if not group.query('p_fdr < @p_thr').empty:
+        if not group.query('p < @p_thr').empty:
 
             flags_sdir = group.query(flags_query('start'))
             flags_edir = group.query(flags_query('end'))
 
+            # Remove flags that fall in regions outside of genes and those
+            # where a smaller part of the gene results in a p-value lower
+            # than p_thr
             if not flags_sdir.empty:
-                # print('start dir - ', name)
-                flagged_sdir[name] = flags_sdir
-
+                flags_sdir = flags_sdir.reset_index().query('srt_off > 0 '
+                                                            '& end_off <= 0'
+                                                            '& p < @p_thr')
             if not flags_edir.empty:
-                # print('end dir - ', name)
-                flagged_edir[name] = flags_edir
+                flags_edir = flags_edir.reset_index().query('srt_off >= 0 '
+                                                            '& end_off <= 0')
+
+                # Remove flags where going into the gene results in a p-value
+                # lower than p_thr (trickier than for sdir since the previous
+                # p-value is not saved in flags_edir, so you have to look it
+                # up in the group)
+                step = abs(group.reset_index()['end_off'].iloc[1]
+                           - group.reset_index()['end_off'].iloc[0])
+                flags_edir['prev_end_off'] = flags_edir['end_off'] - step
+                flags_edir = flags_edir.set_index(['srt_off', 'prev_end_off'])
+                flags_edir = flags_edir[group.loc[flags_edir.index].p
+                                        < p_thr]
 
             if not flags_sdir.empty or not flags_edir.empty:
                 ct += 1
-                print(f'Flagged: {name}')
+                # print(f'Flagged: {name}')
 
-    print(f'\n# flagged genes: {ct} -- # start flags: {len(flagged_sdir)} -- '
-          f'# end flags: {len(flagged_edir)}')
+                try:
+                    mi_at_tx = group.loc[0, 0].log2_mi
+                    p_at_tx = group.loc[0, 0].p
+                except KeyError:
+                    mi_at_tx = np.nan
+                    p_at_tx = np.nan
 
-    print('\nLikely already flagged:')
-    print("\n".join(already))
+                df = pd.Series({'gene': name,
+                                'mi_at_tx': mi_at_tx,
+                                'p_at_tx': p_at_tx})
 
-    return (flagged_sdir, flagged_edir, already)
+                flagged_df_list.append(df)
+
+    print(f'# flagged genes: {ct}')
+
+    if flagged_df_list:
+        flagged = pd.concat(flagged_df_list, axis=1).T
+        flagged = flagged.iloc[abs(flagged.mi_at_tx).sort_values().index]
+        flagged.mi_at_tx = flagged.mi_at_tx.astype(float).round(2)
+        flagged.p_at_tx = flagged.p_at_tx.astype(float).apply(lambda x:
+                                                              f'{x:.2e}')
+    else:
+        flagged = pd.DataFrame(columns=['gene', 'mi_at_tx', 'p_at_tx'])
+
+    flagged = flagged.reset_index(drop=True)
+    # print('\nLikely already seen:')
+    # print("\n".join(already))
+
+    return flagged
 
 
 def get_flags_for_gene(gene: str,
@@ -374,13 +374,73 @@ def flags_query(param: str) -> str:
     'end'.
     '''
 
-    # q = (f'abs(sl_{param[0]}dir) > @slope_thr '
-    #      f'| abs(p_ratio_{param[0]}dir) > @p_ratio_thr')
-
-    # q = (f'abs(sl_{param[0]}dir) > @slope_thr')
-    # q = (f'abs(p_ratio_{param[0]}dir) > @p_ratio_thr')
-
     q = (f'abs(sl_{param[0]}dir) > @slope_thr '
          f'& p_min_{param[0]}dir < @p_thr')
 
     return q
+
+
+def sort_optimized_mi(group, p_thr=1e-5, weight_mi=1, weight_p=1,
+                      weight_ins=0, weight_off=0):
+
+    opt = group.copy(deep=True)
+    opt = opt.reset_index()
+
+    # Remove out of gene and non significant regions
+    opt = opt.query('srt_off >=0 & end_off <= 0 & p < @p_thr')
+
+    # Get normalized values for log2_mi, p, ins number and offset
+    opt['norm_mi'] = opt.log2_mi/10
+    opt['norm_log10_p'] = opt.p.apply(
+        lambda x: abs(-log10(x))/50 if x > 0 else 1)
+    max_ins = max(opt.high_counts + opt.low_counts)
+    opt['norm_ins'] = (opt.high_counts + opt.low_counts)/max_ins
+
+    max_off = max(abs(opt.srt_off) + abs(opt.end_off))
+    opt['norm_off'] = 1 - (abs(opt.srt_off) + abs(opt.end_off))/max_off
+
+    # Get score based on normalized values and weighs
+    opt['score'] = ((weight_mi*opt.norm_mi)**2
+                    + (weight_p*opt.norm_log10_p)**2
+                    + (weight_ins*opt.norm_ins)**2
+                    + (weight_off*opt.norm_off)**2)
+
+    # Sort by score
+    opt = opt.sort_values(by=['score'], ascending=False)
+
+    opt = opt[['srt_off', 'end_off', 'gene_name', 'high_counts',
+               'low_counts', 'log2_mi', 'p', 'score', 'norm_mi',
+               'norm_log10_p', 'norm_ins', 'norm_off']]
+
+    return opt
+
+
+def optimize_flagged_genes(flagged, grouped_sweep, delta_mi_thr=0,
+                           p_thr=1e-5, weight_mi=2, weight_p=1,
+                           weight_ins=0, weight_off=0):
+    opt_list = []
+    for gene in list(flagged.gene):
+
+        group = grouped_sweep.get_group(gene)
+        opt = sort_optimized_mi(group, p_thr, weight_mi, weight_p,
+                                weight_ins, weight_off)
+
+        gene_at_tx = flagged.set_index('gene').loc[gene]
+        gene_at_tx['high_at_tx'] = group.loc[0, 0]['high_counts']
+        gene_at_tx['low_at_tx'] = group.loc[0, 0]['low_counts']
+        gene_at_tx['counts_at_tx'] = (gene_at_tx.high_at_tx
+                                      + gene_at_tx.low_at_tx)
+
+        gene_opt = gene_at_tx.append(opt.iloc[0][['gene_name', 'srt_off',
+                                                  'end_off', 'log2_mi', 'p',
+                                                  'low_counts',
+                                                  'high_counts']])
+        gene_opt['counts'] = gene_opt.high_counts + gene_opt.low_counts
+
+        if gene_opt.srt_off != 0 or gene_opt.end_off != 0:
+            if abs(gene_opt.mi_at_tx - gene_opt.log2_mi) > delta_mi_thr:
+                opt_list.append(gene_opt)
+
+    optimized_mi = pd.concat(opt_list, axis=1).T
+
+    return optimized_mi
