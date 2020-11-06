@@ -40,9 +40,10 @@ flag_data_dir = '../data/sweeps/sweep-flags_2020-10-02'
 screens = [x for x in os.listdir(flag_data_dir) if 'readme' not in x
            and 'DS_Store' not in x]
 
-# screens = ['Ytub_in_TTL-VASH1-2-TKO', *screens[0:20]]
+# screens = screens[0:5]
 opt_list = []
-for screen in screens:
+for idx, screen in enumerate(screens):
+    print(f'Optimizing {screen}: {idx + 1} of {len(screens)}')
 
     params['screen_name'] = screen
 
@@ -65,6 +66,25 @@ for screen in screens:
         print('Empty flags for', screen)
 
 optimized_all = pd.concat(opt_list)
+
+# %% Sort and save excel file
+opt_all_sorted = optimized_all.sort_values(by=['p_fdr_at_tx'],
+                                           ascending=False)
+opt_all_sorted = opt_all_sorted.rename(columns={'log2_mi': 'mi_opt',
+                                                'p': 'p_opt',
+                                                'low_counts': 'low_opt',
+                                                'high_counts': 'high_opt',
+                                                'srt_off': 'srt_off_opt',
+                                                'end_off': 'end_off_opt'})
+
+cols = ['gene_name', 'screen', 'mi_at_tx', 'p_at_tx', 'p_fdr_at_tx', 'mi_opt',
+        'p_opt', 'srt_off_opt', 'end_off_opt']
+opt_all_sorted = opt_all_sorted[cols]
+opt_all_sorted.to_excel('optimized_all.xlsx', index=False)
+
+# %% Filter by original pfdr
+p_fdr_thr = 0.05
+optimized_all = optimized_all.query('p_fdr_at_tx > @p_fdr_thr')
 
 # %%
 plot_filename = 'plots/test_optimized_all.html'

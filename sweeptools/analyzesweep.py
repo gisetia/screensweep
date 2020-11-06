@@ -320,13 +320,16 @@ def flag_by_slope(grouped_sweep: pd.core.groupby.generic.DataFrameGroupBy,
                 try:
                     mi_at_tx = group.loc[0, 0].log2_mi
                     p_at_tx = group.loc[0, 0].p
+                    p_fdr_at_tx = group.loc[0, 0].p_fdr
                 except KeyError:
                     mi_at_tx = np.nan
                     p_at_tx = np.nan
+                    p_fdr_at_tx = np.nan
 
                 df = pd.Series({'gene': name,
                                 'mi_at_tx': mi_at_tx,
-                                'p_at_tx': p_at_tx})
+                                'p_at_tx': p_at_tx,
+                                'p_fdr_at_tx': p_fdr_at_tx})
 
                 flagged_df_list.append(df)
 
@@ -426,6 +429,7 @@ def optimize_flagged_genes(flagged, grouped_sweep, delta_mi_thr=0,
                                 weight_ins, weight_off)
 
         gene_at_tx = flagged.set_index('gene').loc[gene]
+        gene_at_tx['p_fdr_at_tx'] = group.loc[0, 0]['p_fdr']
         gene_at_tx['high_at_tx'] = group.loc[0, 0]['high_counts']
         gene_at_tx['low_at_tx'] = group.loc[0, 0]['low_counts']
         gene_at_tx['counts_at_tx'] = (gene_at_tx.high_at_tx
